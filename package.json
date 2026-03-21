@@ -1,0 +1,28 @@
+{
+  "name": "milkdown-editor",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.19.0",
+    "@milkdown/kit": "^7.19.0",
+    "@milkdown/plugin-listener": "^7.19.0",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-fs": "^2.4.5",
+    "@tauri-apps/plugin-os": "^2.3.2",
+    "mathlive": "^0.105.0",
+    "plantuml-encoder": "^1.4.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

@@ -1,0 +1,148 @@
+use tauri::{Emitter, Manager};
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MenuLabels {
+    menu_file: String,
+    menu_edit: String,
+    menu_view: String,
+    menu_help: String,
+    menu_new: String,
+    menu_open: String,
+    menu_open_folder: String,
+    menu_save: String,
+    menu_save_as: String,
+    menu_export_html: String,
+    menu_export_pdf: String,
+    menu_toggle_sidebar: String,
+    menu_toggle_theme: String,
+    menu_toggle_fullscreen: String,
+}
+
+fn build_menu(app: &tauri::AppHandle) -> tauri::menu::Menu<tauri::Wry> {
+    build_menu_with_labels(app, &default_labels())
+}
+
+fn build_menu_with_labels(app: &tauri::AppHandle, labels: &MenuLabels) -> tauri::menu::Menu<tauri::Wry> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+    let file_menu = SubmenuBuilder::new(app, &labels.menu_file)
+        .item(&MenuItemBuilder::with_id("new", &labels.menu_new).accelerator("CmdOrCtrl+N").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("open", &labels.menu_open).accelerator("CmdOrCtrl+O").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("open-folder", &labels.menu_open_folder).build(app).unwrap())
+        .separator()
+        .item(&MenuItemBuilder::with_id("save", &labels.menu_save).accelerator("CmdOrCtrl+S").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("save-as", &labels.menu_save_as).accelerator("CmdOrCtrl+Shift+S").build(app).unwrap())
+        .separator()
+        .item(&MenuItemBuilder::with_id("export-html", &labels.menu_export_html).build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("export-pdf", &labels.menu_export_pdf).build(app).unwrap())
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, None).unwrap())
+        .build().unwrap();
+
+    let edit_menu = SubmenuBuilder::new(app, &labels.menu_edit)
+        .item(&PredefinedMenuItem::undo(app, None).unwrap())
+        .item(&PredefinedMenuItem::redo(app, None).unwrap())
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, None).unwrap())
+        .item(&PredefinedMenuItem::copy(app, None).unwrap())
+        .item(&PredefinedMenuItem::paste(app, None).unwrap())
+        .item(&PredefinedMenuItem::select_all(app, None).unwrap())
+        .build().unwrap();
+
+    let lang_submenu = SubmenuBuilder::new(app, "Language / 语言")
+        .item(&MenuItemBuilder::with_id("lang-en", "English").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("lang-zh", "中文").build(app).unwrap())
+        .build().unwrap();
+
+    let view_menu = SubmenuBuilder::new(app, &labels.menu_view)
+        .item(&MenuItemBuilder::with_id("toggle-sidebar", &labels.menu_toggle_sidebar).accelerator("CmdOrCtrl+\\").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("toggle-theme", &labels.menu_toggle_theme).accelerator("CmdOrCtrl+/").build(app).unwrap())
+        .separator()
+        .item(&MenuItemBuilder::with_id("toggle-fullscreen", &labels.menu_toggle_fullscreen).accelerator("F11").build(app).unwrap())
+        .separator()
+        .item(&lang_submenu)
+        .build().unwrap();
+
+    let help_menu = SubmenuBuilder::new(app, &labels.menu_help)
+        .item(&PredefinedMenuItem::about(app, None, None).unwrap())
+        .build().unwrap();
+
+    MenuBuilder::new(app)
+        .item(&file_menu)
+        .item(&edit_menu)
+        .item(&view_menu)
+        .item(&help_menu)
+        .build().unwrap()
+}
+
+#[tauri::command]
+fn update_menu(app: tauri::AppHandle, labels: MenuLabels) -> Result<(), String> {
+    eprintln!("[menu] update_menu called, file={}", labels.menu_file);
+    let menu = build_menu_with_labels(&app, &labels);
+
+    // Try window first, then app
+    if let Some(window) = app.get_webview_window("main") {
+        eprintln!("[menu] setting menu on window");
+        window.set_menu(menu).map_err(|e| {
+            eprintln!("[menu] window.set_menu error: {}", e);
+            e.to_string()
+        })?;
+    } else {
+        eprintln!("[menu] no window found, setting on app");
+        app.set_menu(menu).map_err(|e| e.to_string())?;
+    }
+    eprintln!("[menu] update_menu done");
+    Ok(())
+}
+
+fn default_labels() -> MenuLabels {
+    MenuLabels {
+        menu_file: "File".into(),
+        menu_edit: "Edit".into(),
+        menu_view: "View".into(),
+        menu_help: "Help".into(),
+        menu_new: "New".into(),
+        menu_open: "Open...".into(),
+        menu_open_folder: "Open Folder...".into(),
+        menu_save: "Save".into(),
+        menu_save_as: "Save As...".into(),
+        menu_export_html: "Export HTML".into(),
+        menu_export_pdf: "Export PDF".into(),
+        menu_toggle_sidebar: "Toggle Sidebar".into(),
+        menu_toggle_theme: "Toggle Theme".into(),
+        menu_toggle_fullscreen: "Toggle Fullscreen".into(),
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
+        .invoke_handler(tauri::generate_handler![update_menu])
+        .setup(|app| {
+            let menu = build_menu(&app.handle());
+            app.set_menu(menu)?;
+
+            #[cfg(target_os = "macos")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    use tauri::TitleBarStyle;
+                    let _ = window.set_title_bar_style(TitleBarStyle::Overlay);
+                }
+            }
+
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let id: &str = event.id().as_ref();
+            if let Some(window) = app.get_webview_window("main") {
+                let event_name = format!("menu-{}", id);
+                let _ = window.emit(&event_name, ());
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

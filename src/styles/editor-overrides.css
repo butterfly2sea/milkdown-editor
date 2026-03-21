@@ -1,0 +1,272 @@
+/* Override Crepe default styles to use our CSS variables */
+
+.milkdown {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.milkdown .editor {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+/* Headings */
+.milkdown h1,
+.milkdown h2,
+.milkdown h3,
+.milkdown h4,
+.milkdown h5,
+.milkdown h6 {
+  color: var(--text-primary) !important;
+}
+
+/* Code blocks */
+.milkdown pre,
+.milkdown .code-block {
+  background: var(--code-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.milkdown code {
+  background: var(--code-bg) !important;
+  color: var(--code-text) !important;
+  border-radius: 3px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Blockquote */
+.milkdown blockquote {
+  border-left-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Table */
+.milkdown table {
+  border-color: var(--border-color) !important;
+}
+
+.milkdown th,
+.milkdown td {
+  border-color: var(--border-color) !important;
+  transition: border-color 0.2s;
+}
+
+.milkdown th {
+  background: var(--bg-secondary) !important;
+  transition: background-color 0.2s;
+}
+
+/* Links */
+.milkdown a {
+  color: var(--accent) !important;
+}
+
+.milkdown a:hover {
+  color: var(--accent-hover) !important;
+}
+
+/* Horizontal rule */
+.milkdown hr {
+  border-color: var(--border-color) !important;
+}
+
+/* Selection */
+.milkdown .ProseMirror-selectednode {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Math wrapper styles */
+.math-wrapper {
+  transition: border-color 0.15s;
+}
+
+.math-wrapper:hover {
+  border-color: var(--accent) !important;
+}
+
+.math-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+  background: var(--bg-secondary);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* CodeMirror (code blocks) dark mode overrides */
+.milkdown .cm-editor {
+  background: var(--code-bg) !important;
+  color: var(--code-text) !important;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.milkdown .cm-editor .cm-gutters {
+  background: var(--code-bg) !important;
+  color: var(--text-muted) !important;
+  border-right-color: var(--border-color) !important;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.milkdown .cm-editor .cm-activeLineGutter,
+.milkdown .cm-editor .cm-activeLine {
+  background: var(--bg-secondary) !important;
+}
+
+.milkdown .cm-editor .cm-cursor {
+  border-left-color: var(--text-primary) !important;
+}
+
+.milkdown .cm-editor .cm-selectionBackground,
+.milkdown .cm-editor .cm-content ::selection {
+  background: rgba(var(--accent-rgb, 88, 166, 255), 0.3) !important;
+}
+
+.milkdown .cm-editor .cm-line {
+  color: var(--code-text) !important;
+}
+
+/* CodeMirror syntax token colors for dark mode */
+:root[data-theme="dark"] .milkdown .cm-editor .cm-keyword { color: #c586c0 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-string { color: #ce9178 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-comment { color: #6a9955 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-number { color: #b5cea8 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-variableName { color: #9cdcfe !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-typeName { color: #4ec9b0 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-definition { color: #dcdcaa !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-propertyName { color: #9cdcfe !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-operator { color: #d4d4d4 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-punctuation { color: #d4d4d4 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-meta { color: #569cd6 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-atom { color: #569cd6 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-bracket { color: #ffd700 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-tag { color: #569cd6 !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-attribute { color: #9cdcfe !important; }
+:root[data-theme="dark"] .milkdown .cm-editor .cm-angleBracket { color: #808080 !important; }
+
+/* Code block header (language selector, copy button, etc.) */
+:root[data-theme="dark"] .milkdown .code-block > div:first-child,
+:root[data-theme="dark"] .milkdown [data-type="code-block"] > div:first-child,
+:root[data-theme="dark"] .milkdown pre + div,
+:root[data-theme="dark"] .milkdown .cm-editor + div {
+  background: var(--bg-secondary) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+:root[data-theme="dark"] .milkdown .code-block button,
+:root[data-theme="dark"] .milkdown [data-type="code-block"] button {
+  color: var(--text-secondary) !important;
+}
+
+/* Generic: any div inside code block that looks like a header (has buttons) */
+:root[data-theme="dark"] .milkdown div[class] > .cm-editor {
+  border-color: var(--border-color) !important;
+}
+
+/* Catch-all: force dark bg on all direct children divs of code block wrapper that are not cm-editor */
+:root[data-theme="dark"] .milkdown div:has(> .cm-editor) > div:not(.cm-editor) {
+  background: var(--bg-secondary) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+:root[data-theme="dark"] .milkdown div:has(> .cm-editor) > div:not(.cm-editor) button {
+  color: var(--text-secondary) !important;
+}
+
+:root[data-theme="dark"] .milkdown div:has(> .cm-editor) > div:not(.cm-editor) button:hover {
+  background: var(--sidebar-hover) !important;
+}
+
+:root[data-theme="dark"] .milkdown div:has(> .cm-editor) > div:not(.cm-editor) svg {
+  fill: var(--text-muted) !important;
+  stroke: var(--text-muted) !important;
+}
+
+/* Code block wrapper border */
+:root[data-theme="dark"] .milkdown div:has(> .cm-editor) {
+  border-color: var(--border-color) !important;
+  background: var(--code-bg) !important;
+}
+
+/* Code block wrapper - milkdown-code-block class */
+:root[data-theme="dark"] .milkdown .milkdown-code-block,
+:root[data-theme="dark"] .milkdown [class*="code-block"],
+:root[data-theme="dark"] .milkdown [class*="codeBlock"] {
+  background: var(--code-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--code-text) !important;
+}
+
+/* Inline code */
+:root[data-theme="dark"] .milkdown :not(pre) > code {
+  background: var(--code-bg) !important;
+  color: #e06c75 !important;
+}
+
+/* Slash menu / dropdown */
+:root[data-theme="dark"] .milkdown-slash-menu,
+:root[data-theme="dark"] .milkdown [data-popper-placement] {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Block handle / toolbar */
+:root[data-theme="dark"] .milkdown .block-handle,
+:root[data-theme="dark"] .milkdown .toolbar {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* MathLive dark mode */
+:root[data-theme="dark"] math-field {
+  --hue: 210;
+  color: var(--text-primary) !important;
+}
+
+:root[data-theme="dark"] .math-source-input {
+  background: var(--code-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* PlantUML dark mode */
+:root[data-theme="dark"] .plantuml-preview {
+  background: var(--bg-primary) !important;
+}
+
+:root[data-theme="dark"] .plantuml-source {
+  background: var(--code-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+:root[data-theme="dark"] .plantuml-label {
+  background: var(--bg-secondary) !important;
+  color: var(--text-muted) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+/* PlantUML styles */
+.plantuml-wrapper {
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.plantuml-wrapper:hover {
+  border-color: var(--accent) !important;
+}
+
+/* Responsive: auto-hide sidebar on narrow screens */
+@media (max-width: 768px) {
+  #sidebar.open {
+    position: absolute;
+    z-index: 50;
+    height: calc(100vh - 36px - 28px);
+    box-shadow: var(--shadow-md);
+  }
+}
