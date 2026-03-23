@@ -3,6 +3,7 @@ import type { FileTreeNode } from '../file/fs';
 export class FileTree {
   private el: HTMLElement;
   private currentFile: string | null = null;
+  private expandedPaths: Set<string> = new Set();
   public onFileSelect?: (path: string) => void;
 
   constructor(container: HTMLElement) {
@@ -52,9 +53,11 @@ export class FileTree {
       `;
 
       if (node.isDir) {
-        let expanded = true;
+        // Preserve expansion state across refreshes; default to expanded
+        let expanded = this.expandedPaths.has(node.path) || !this.expandedPaths.size;
+        if (expanded) this.expandedPaths.add(node.path);
         const arrow = document.createElement('span');
-        arrow.textContent = '▾';
+        arrow.textContent = expanded ? '▾' : '▸';
         arrow.style.cssText = 'font-size: 10px; width: 12px; text-align: center;';
 
         const childContainer = document.createElement('div');
@@ -68,6 +71,11 @@ export class FileTree {
           expanded = !expanded;
           arrow.textContent = expanded ? '▾' : '▸';
           childContainer.style.display = expanded ? 'block' : 'none';
+          if (expanded) {
+            this.expandedPaths.add(node.path);
+          } else {
+            this.expandedPaths.delete(node.path);
+          }
         });
 
         item.addEventListener('mouseenter', () => {
@@ -83,6 +91,7 @@ export class FileTree {
         });
 
         container.appendChild(item);
+        childContainer.style.display = expanded ? 'block' : 'none';
         container.appendChild(childContainer);
 
         if (node.children) {

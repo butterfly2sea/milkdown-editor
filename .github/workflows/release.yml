@@ -59,6 +59,13 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing (configure these secrets for notarized builds):
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v__VERSION__
           releaseName: Milkdown Editor v__VERSION__
@@ -69,6 +76,11 @@ jobs:
             - **Windows**: `.msi` or `.exe` installer
             - **macOS**: `.dmg` disk image
             - **Linux**: `.deb` package or `.AppImage`
+
+            ## macOS Note
+            The macOS build is not notarized. If macOS shows "damaged" or "unidentified developer" warning, use one of these methods:
+            1. Right-click the app → Open → Confirm
+            2. Run in Terminal: `xattr -cr /Applications/Milkdown\ Editor.app`
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}

@@ -76,6 +76,7 @@ class I18n {
           menuToggleSidebar: this._locale.menuToggleSidebar,
           menuToggleTheme: this._locale.menuToggleTheme,
           menuToggleFullscreen: this._locale.menuToggleFullscreen,
+          menuSettings: this._locale.menuSettings,
         },
       }).then(() => {
         console.log('[i18n] native menu updated successfully');

@@ -17,6 +17,7 @@ struct MenuLabels {
     menu_toggle_sidebar: String,
     menu_toggle_theme: String,
     menu_toggle_fullscreen: String,
+    menu_settings: String,
 }
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::menu::Menu<tauri::Wry> {
@@ -62,6 +63,8 @@ fn build_menu_with_labels(app: &tauri::AppHandle, labels: &MenuLabels) -> tauri:
         .item(&MenuItemBuilder::with_id("toggle-fullscreen", &labels.menu_toggle_fullscreen).accelerator("F11").build(app).unwrap())
         .separator()
         .item(&lang_submenu)
+        .separator()
+        .item(&MenuItemBuilder::with_id("settings", &labels.menu_settings).accelerator("CmdOrCtrl+,").build(app).unwrap())
         .build().unwrap();
 
     let help_menu = SubmenuBuilder::new(app, &labels.menu_help)
@@ -112,15 +115,32 @@ fn default_labels() -> MenuLabels {
         menu_toggle_sidebar: "Toggle Sidebar".into(),
         menu_toggle_theme: "Toggle Theme".into(),
         menu_toggle_fullscreen: "Toggle Fullscreen".into(),
+        menu_settings: "Settings...".into(),
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+fn is_markdown_file(path: &str) -> bool {
+    path.ends_with(".md") || path.ends_with(".markdown")
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // When another instance is launched with a file path, forward to the existing window
+            for arg in args.iter().skip(1) {
+                if is_markdown_file(arg) {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("open-file", arg.to_string());
+                        let _ = window.set_focus();
+                    }
+                    break;
+                }
+            }
+        }))
         .invoke_handler(tauri::generate_handler![update_menu])
         .setup(|app| {
             let menu = build_menu(&app.handle());
@@ -131,6 +151,23 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     use tauri::TitleBarStyle;
                     let _ = window.set_title_bar_style(TitleBarStyle::Overlay);
+                }
+            }
+
+            // Check CLI args for a file to open (file association / right-click open)
+            let args: Vec<String> = std::env::args().collect();
+            for arg in args.iter().skip(1) {
+                if is_markdown_file(arg) {
+                    let path = arg.clone();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let window_clone = window.clone();
+                        // Emit after frontend is ready
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(800));
+                            let _ = window_clone.emit("open-file", path);
+                        });
+                    }
+                    break;
                 }
             }
 

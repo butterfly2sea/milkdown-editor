@@ -51,6 +51,19 @@ export interface Locale {
   menuToggleTheme: string;
   menuToggleFullscreen: string;
 
+  // Settings
+  menuSettings: string;
+  settings: string;
+  plantumlServerUrl: string;
+  plantumlServerUrlPlaceholder: string;
+  save: string;
+  cancel: string;
+  resetDefault: string;
+
+  // File change detection
+  fileChangedReload: string;
+  fileChangedDiscardReload: string;
+
   // Default content
   welcomeTitle: string;
   welcomeSubtitle: string;
@@ -95,6 +108,15 @@ export const en: Locale = {
   menuToggleSidebar: 'Toggle Sidebar',
   menuToggleTheme: 'Toggle Theme',
   menuToggleFullscreen: 'Toggle Fullscreen',
+  menuSettings: 'Settings...',
+  settings: 'Settings',
+  plantumlServerUrl: 'PlantUML Server URL',
+  plantumlServerUrlPlaceholder: 'https://www.plantuml.com/plantuml',
+  save: 'Save',
+  cancel: 'Cancel',
+  resetDefault: 'Reset to default',
+  fileChangedReload: 'File has been changed on disk. Reload?',
+  fileChangedDiscardReload: 'File has been changed on disk. You have unsaved changes. Discard and reload?',
   welcomeTitle: 'Welcome to Milkdown Editor',
   welcomeSubtitle: 'Start typing your markdown here...',
 };
@@ -138,6 +160,15 @@ export const zh: Locale = {
   menuToggleSidebar: '切换侧边栏',
   menuToggleTheme: '切换主题',
   menuToggleFullscreen: '切换全屏',
+  menuSettings: '设置...',
+  settings: '设置',
+  plantumlServerUrl: 'PlantUML 服务器地址',
+  plantumlServerUrlPlaceholder: 'https://www.plantuml.com/plantuml',
+  save: '保存',
+  cancel: '取消',
+  resetDefault: '恢复默认',
+  fileChangedReload: '文件已在磁盘上被修改，是否重新加载？',
+  fileChangedDiscardReload: '文件已在磁盘上被修改，有未保存的更改，是否丢弃并重新加载？',
   welcomeTitle: '欢迎使用 Milkdown 编辑器',
   welcomeSubtitle: '在这里开始书写你的 Markdown...',
 };

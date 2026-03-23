@@ -12,37 +12,15 @@ import { FileTree } from './sidebar/file-tree';
 import { exportHTML } from './file/export-html';
 import { exportPDF } from './file/export-pdf';
 import { i18n } from './i18n';
+import { initPlantUMLServerFromStorage, showSettingsModal } from './settings/settings-modal';
 
-const defaultContent = `# Welcome to Milkdown Editor
-
-Start typing your markdown here...
-
-## Features
-
-- **Bold** and *italic* text
-- Lists and checkboxes
-- Code blocks with syntax highlighting
-- Tables
-- Math formulas with MathLive: $E=mc^2$
-- PlantUML diagrams
-
-\`\`\`javascript
-console.log('Hello, Milkdown!');
-\`\`\`
-
-| Feature | Status |
-|---------|--------|
-| Editor  | Done   |
-| Math    | Done   |
-| PlantUML| Done   |
-| Files   | Done   |
-| Export  | Soon   |
-| Themes  | Soon   |
-`;
+const defaultContent = '';
 
 async function main() {
   // Initialize i18n before anything else
   i18n.init();
+  // Restore PlantUML server URL from localStorage
+  initPlantUMLServerFromStorage();
 
   const root = document.getElementById('editor-root');
   const titlebarEl = document.getElementById('titlebar');
@@ -74,8 +52,9 @@ async function main() {
     // Skip change tracking during initial editor creation
     if (!editorReady) return;
 
-    fileManager.hasUnsavedChanges = true;
-    titleBar.setUnsaved(true);
+    const reallyChanged = fileManager.hasRealChanges(markdown);
+    fileManager.hasUnsavedChanges = reallyChanged;
+    titleBar.setUnsaved(reallyChanged);
     statusBar.updateWordCount(markdown);
 
     if (editorInstance) {
@@ -83,14 +62,19 @@ async function main() {
       statusBar.updateCursorPosition(line, col);
     }
 
-    // Schedule auto-save
-    fileManager.scheduleAutoSave(markdown);
+    // Schedule auto-save only if content actually changed
+    if (reallyChanged) {
+      fileManager.scheduleAutoSave(markdown);
+    }
   });
   editorInstance = editor;
   // Expose for testing/debugging
   (window as any).__editor = editor;
   // Mark editor as ready after initial setup to avoid false "unsaved" state
   requestAnimationFrame(() => { editorReady = true; });
+
+  // Set base content for change tracking
+  fileManager.setBaseContent(defaultContent);
 
   // Auto-save callback
   // Reset initial unsaved state
@@ -112,6 +96,7 @@ async function main() {
     const content = await fileManager.openFile(path);
     if (content !== undefined) {
       editor.setMarkdown(content);
+      root.scrollTop = 0;
       titleBar.setFileName(fileManager.currentFileName);
       titleBar.setUnsaved(false);
       statusBar.updateWordCount(content);
@@ -147,7 +132,10 @@ async function main() {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
     fileManager.newFile();
-    editor.setMarkdown('# Untitled\n\n');
+    const newContent = '# Untitled\n\n';
+    editor.setMarkdown(newContent);
+    root.scrollTop = 0;
+    fileManager.setBaseContent(newContent);
     titleBar.setFileName(i18n.t.untitled);
     titleBar.setUnsaved(false);
   };
@@ -233,8 +221,9 @@ async function main() {
 
   // Sync source textarea changes for word count
   sourceTextarea.addEventListener('input', () => {
-    fileManager.hasUnsavedChanges = true;
-    titleBar.setUnsaved(true);
+    const reallyChanged = fileManager.hasRealChanges(sourceTextarea.value);
+    fileManager.hasUnsavedChanges = reallyChanged;
+    titleBar.setUnsaved(reallyChanged);
     statusBar.updateWordCount(sourceTextarea.value);
   });
 
@@ -275,6 +264,43 @@ async function main() {
     }
   });
 
+  // -- External file change detection & file tree refresh on window focus --
+  window.addEventListener('focus', async () => {
+    // Check if current file was modified externally
+    if (fileManager.currentPath) {
+      const changed = await fileManager.checkExternalChange();
+      if (changed) {
+        const message = fileManager.hasUnsavedChanges
+          ? i18n.t.fileChangedDiscardReload
+          : i18n.t.fileChangedReload;
+        if (confirm(message)) {
+          const content = await fileManager.reloadFile();
+          if (content !== null) {
+            editor.setMarkdown(content);
+            root.scrollTop = 0;
+            titleBar.setFileName(fileManager.currentFileName);
+            titleBar.setUnsaved(false);
+            statusBar.updateWordCount(content);
+          }
+        } else {
+          await fileManager.dismissExternalChange();
+        }
+      }
+    }
+
+    // Refresh file tree if a folder is open
+    if (fileManager.hasFolderOpen) {
+      const tree = await fileManager.refreshFolder();
+      if (tree) {
+        fileTree.render(tree);
+        // Re-highlight active file
+        if (fileManager.currentPath) {
+          fileTree.setActiveFile(fileManager.currentPath);
+        }
+      }
+    }
+  });
+
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
     import('@tauri-apps/api/event').then(({ listen }) => {
@@ -302,6 +328,7 @@ async function main() {
         },
         'menu-lang-en': () => i18n.setLang('en'),
         'menu-lang-zh': () => i18n.setLang('zh'),
+        'menu-settings': () => showSettingsModal(),
       };
 
       for (const [event, handler] of Object.entries(menuHandlers)) {
@@ -310,6 +337,12 @@ async function main() {
           handler();
         });
       }
+
+      // Listen for file open from OS file association / single-instance
+      listen<string>('open-file', (event) => {
+        console.log('[open-file] received:', event.payload);
+        openFile(event.payload);
+      });
     });
   }
 }

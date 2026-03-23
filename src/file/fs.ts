@@ -1,5 +1,5 @@
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { readTextFile, writeTextFile, readDir, remove, mkdir } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from '@tauri-apps/plugin-fs';
 
 export interface FileTreeNode {
   name: string;
@@ -12,6 +12,10 @@ export class FileManager {
   private _currentPath: string | null = null;
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private _hasUnsavedChanges = false;
+  private _lastSavedContent: string = '';
+  private _lastModifiedAt: number | null = null;
+  private _openFolderPath: string | null = null;
+  private _openFolderName: string | null = null;
   public onAutoSave?: () => void;
 
   get currentFileName(): string {
@@ -32,17 +36,41 @@ export class FileManager {
     this._hasUnsavedChanges = v;
   }
 
+  setBaseContent(content: string): void {
+    this._lastSavedContent = content;
+  }
+
+  hasRealChanges(currentContent: string): boolean {
+    return currentContent !== this._lastSavedContent;
+  }
+
   async openFolder(): Promise<FileTreeNode | null> {
     try {
       const dir = await open({
         multiple: false,
         directory: true,
+        // On macOS, press Cmd+Shift+. in the dialog to show hidden files
       });
       if (!dir) return null;
-      return this.readDirectory(dir as string, this.getBaseName(dir as string));
+      this._openFolderPath = dir as string;
+      this._openFolderName = this.getBaseName(dir as string);
+      return this.readDirectory(this._openFolderPath, this._openFolderName);
     } catch {
       return null;
     }
+  }
+
+  async refreshFolder(): Promise<FileTreeNode | null> {
+    if (!this._openFolderPath || !this._openFolderName) return null;
+    try {
+      return this.readDirectory(this._openFolderPath, this._openFolderName);
+    } catch {
+      return null;
+    }
+  }
+
+  get hasFolderOpen(): boolean {
+    return this._openFolderPath !== null;
   }
 
   private async readDirectory(dirPath: string, name: string): Promise<FileTreeNode> {
@@ -53,10 +81,14 @@ export class FileManager {
       for (const entry of entries) {
         const entryPath = `${dirPath}/${entry.name}`;
         if (entry.isDirectory) {
-          const child = await this.readDirectory(entryPath, entry.name);
-          // Only include directories that contain md files (directly or nested)
-          if (child.children && child.children.length > 0) {
-            children.push(child);
+          try {
+            const child = await this.readDirectory(entryPath, entry.name);
+            // Only include directories that contain md files (directly or nested)
+            if (child.children && child.children.length > 0) {
+              children.push(child);
+            }
+          } catch {
+            // Skip directories we can't read (permission denied on macOS hidden dirs, etc.)
           }
         } else if (entry.name.endsWith('.md') || entry.name.endsWith('.markdown')) {
           children.push({
@@ -94,7 +126,14 @@ export class FileManager {
       }
       this._currentPath = path;
       const content = await readTextFile(path);
+      this._lastSavedContent = content;
       this._hasUnsavedChanges = false;
+      try {
+        const info = await stat(path);
+        this._lastModifiedAt = info.mtime?.getTime() ?? null;
+      } catch {
+        this._lastModifiedAt = null;
+      }
       return content;
     } catch {
       return '';
@@ -107,7 +146,14 @@ export class FileManager {
     }
     try {
       await writeTextFile(this._currentPath, content);
+      this._lastSavedContent = content;
       this._hasUnsavedChanges = false;
+      try {
+        const info = await stat(this._currentPath);
+        this._lastModifiedAt = info.mtime?.getTime() ?? null;
+      } catch {
+        this._lastModifiedAt = null;
+      }
       return true;
     } catch {
       return false;
@@ -125,7 +171,14 @@ export class FileManager {
       if (!path) return false;
       this._currentPath = path;
       await writeTextFile(path, content);
+      this._lastSavedContent = content;
       this._hasUnsavedChanges = false;
+      try {
+        const info = await stat(path);
+        this._lastModifiedAt = info.mtime?.getTime() ?? null;
+      } catch {
+        this._lastModifiedAt = null;
+      }
       return true;
     } catch {
       return false;
@@ -134,6 +187,8 @@ export class FileManager {
 
   newFile(): void {
     this._currentPath = null;
+    this._lastSavedContent = '';
+    this._lastModifiedAt = null;
     this._hasUnsavedChanges = false;
   }
 
@@ -166,6 +221,41 @@ export class FileManager {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async checkExternalChange(): Promise<boolean> {
+    if (!this._currentPath || this._lastModifiedAt === null) return false;
+    try {
+      const info = await stat(this._currentPath);
+      const currentMtime = info.mtime?.getTime() ?? null;
+      return currentMtime !== null && currentMtime !== this._lastModifiedAt;
+    } catch {
+      return false;
+    }
+  }
+
+  async reloadFile(): Promise<string | null> {
+    if (!this._currentPath) return null;
+    try {
+      const content = await readTextFile(this._currentPath);
+      const info = await stat(this._currentPath);
+      this._lastModifiedAt = info.mtime?.getTime() ?? null;
+      this._lastSavedContent = content;
+      this._hasUnsavedChanges = false;
+      return content;
+    } catch {
+      return null;
+    }
+  }
+
+  async dismissExternalChange(): Promise<void> {
+    if (!this._currentPath) return;
+    try {
+      const info = await stat(this._currentPath);
+      this._lastModifiedAt = info.mtime?.getTime() ?? null;
+    } catch {
+      // ignore
     }
   }
 

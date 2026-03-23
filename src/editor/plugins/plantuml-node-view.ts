@@ -216,7 +216,10 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
         const url = `${server}/svg/${encoded}`;
 
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(errorBody || `HTTP ${response.status}`);
+        }
 
         const svg = await response.text();
         if (svg.includes('<svg')) {
@@ -236,7 +239,9 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         lastSvgText = '';
-        previewEl.innerHTML = `<span style="color: #e53e3e; font-size: 12px;">Rendering failed: ${msg}<br><span style="color: var(--text-muted, #999);">Check network or configure PlantUML server</span></span>`;
+        const sanitized = msg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const truncated = sanitized.length > 1000 ? sanitized.substring(0, 1000) + '...' : sanitized;
+        previewEl.innerHTML = `<div style="color: #e53e3e; font-size: 12px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; text-align: left; padding: 8px;">${truncated}<br><span style="color: var(--text-muted, #999);">Check syntax or configure PlantUML server</span></div>`;
       }
     }
 
