@@ -64,6 +64,60 @@ export interface Locale {
   fileChangedReload: string;
   fileChangedDiscardReload: string;
 
+  // Edit menu
+  menuUndo: string;
+  menuRedo: string;
+  menuFind: string;
+  menuFindReplace: string;
+
+  // Search
+  searchPlaceholder: string;
+  replacePlaceholder: string;
+  noMatches: string;
+  matchOf: string;
+  replaceAll: string;
+
+  // About
+  menuAbout: string;
+  aboutTitle: string;
+  aboutDescription: string;
+  aboutVersion: string;
+  aboutBuiltWith: string;
+  aboutOk: string;
+
+  // Sidebar tabs
+  tabFiles: string;
+  tabOutline: string;
+  tabRemote: string;
+  downloadToLocal: string;
+  syncToWebdav: string;
+  unsyncFromWebdav: string;
+  syncCurrentFile: string;
+  chooseLocalPath: string;
+  syncStatusSynced: string;
+  menuSyncFile: string;
+  menuMarkSync: string;
+
+  // WebDAV sync
+  webdavSettings: string;
+  webdavServerUrl: string;
+  webdavUsername: string;
+  webdavPassword: string;
+  webdavRemotePath: string;
+  webdavSyncInterval: string;
+  webdavTestConnection: string;
+  webdavConnectionSuccess: string;
+  webdavConnectionFailed: string;
+  webdavSyncEnabled: string;
+  webdavConflict: string;
+  webdavKeepLocal: string;
+  webdavKeepRemote: string;
+  webdavKeepBoth: string;
+  syncStatusIdle: string;
+  syncStatusSyncing: string;
+  syncStatusError: string;
+  minutes: string;
+
   // Default content
   welcomeTitle: string;
   welcomeSubtitle: string;
@@ -117,6 +171,50 @@ export const en: Locale = {
   resetDefault: 'Reset to default',
   fileChangedReload: 'File has been changed on disk. Reload?',
   fileChangedDiscardReload: 'File has been changed on disk. You have unsaved changes. Discard and reload?',
+  menuUndo: 'Undo',
+  menuRedo: 'Redo',
+  menuFind: 'Find...',
+  menuFindReplace: 'Find and Replace...',
+  searchPlaceholder: 'Find...',
+  replacePlaceholder: 'Replace...',
+  noMatches: 'No matches',
+  matchOf: 'of',
+  replaceAll: 'Replace All',
+  menuAbout: 'About',
+  aboutTitle: 'About Milkdown Editor',
+  aboutDescription: 'A modern WYSIWYG Markdown editor',
+  aboutVersion: 'Version',
+  aboutBuiltWith: 'Built with',
+  aboutOk: 'OK',
+  tabFiles: 'Files',
+  tabOutline: 'Outline',
+  tabRemote: 'Remote',
+  downloadToLocal: 'Download to local',
+  syncToWebdav: 'Sync to WebDAV',
+  unsyncFromWebdav: 'Unsync',
+  syncCurrentFile: 'Sync Current File',
+  chooseLocalPath: 'Choose save location',
+  syncStatusSynced: 'Synced',
+  menuSyncFile: 'Sync Current File',
+  menuMarkSync: 'Mark for Sync',
+  webdavSettings: 'WebDAV Sync',
+  webdavServerUrl: 'Server URL',
+  webdavUsername: 'Username',
+  webdavPassword: 'Password',
+  webdavRemotePath: 'Remote Path',
+  webdavSyncInterval: 'Sync Interval',
+  webdavTestConnection: 'Test Connection',
+  webdavConnectionSuccess: 'Connection successful',
+  webdavConnectionFailed: 'Connection failed',
+  webdavSyncEnabled: 'Enable Sync',
+  webdavConflict: 'Sync Conflict',
+  webdavKeepLocal: 'Keep Local',
+  webdavKeepRemote: 'Keep Remote',
+  webdavKeepBoth: 'Keep Both',
+  syncStatusIdle: 'Synced',
+  syncStatusSyncing: 'Syncing...',
+  syncStatusError: 'Sync error',
+  minutes: 'minutes',
   welcomeTitle: 'Welcome to Milkdown Editor',
   welcomeSubtitle: 'Start typing your markdown here...',
 };
@@ -169,6 +267,50 @@ export const zh: Locale = {
   resetDefault: '恢复默认',
   fileChangedReload: '文件已在磁盘上被修改，是否重新加载？',
   fileChangedDiscardReload: '文件已在磁盘上被修改，有未保存的更改，是否丢弃并重新加载？',
+  menuUndo: '撤销',
+  menuRedo: '重做',
+  menuFind: '查找...',
+  menuFindReplace: '查找和替换...',
+  searchPlaceholder: '查找...',
+  replacePlaceholder: '替换...',
+  noMatches: '无匹配',
+  matchOf: '/',
+  replaceAll: '全部替换',
+  menuAbout: '关于',
+  aboutTitle: '关于 Milkdown 编辑器',
+  aboutDescription: '一个现代的所见即所得 Markdown 编辑器',
+  aboutVersion: '版本',
+  aboutBuiltWith: '构建技术',
+  aboutOk: '确定',
+  tabFiles: '文件',
+  tabOutline: '大纲',
+  tabRemote: '远程',
+  downloadToLocal: '下载到本地',
+  syncToWebdav: '同步到 WebDAV',
+  unsyncFromWebdav: '取消同步',
+  syncCurrentFile: '同步当前文件',
+  chooseLocalPath: '选择保存位置',
+  syncStatusSynced: '已同步',
+  menuSyncFile: '同步当前文件',
+  menuMarkSync: '标记同步',
+  webdavSettings: 'WebDAV 同步',
+  webdavServerUrl: '服务器地址',
+  webdavUsername: '用户名',
+  webdavPassword: '密码',
+  webdavRemotePath: '远程路径',
+  webdavSyncInterval: '同步间隔',
+  webdavTestConnection: '测试连接',
+  webdavConnectionSuccess: '连接成功',
+  webdavConnectionFailed: '连接失败',
+  webdavSyncEnabled: '启用同步',
+  webdavConflict: '同步冲突',
+  webdavKeepLocal: '保留本地',
+  webdavKeepRemote: '保留远程',
+  webdavKeepBoth: '保留两者',
+  syncStatusIdle: '已同步',
+  syncStatusSyncing: '同步中...',
+  syncStatusError: '同步错误',
+  minutes: '分钟',
   welcomeTitle: '欢迎使用 Milkdown 编辑器',
   welcomeSubtitle: '在这里开始书写你的 Markdown...',
 };

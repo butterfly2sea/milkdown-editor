@@ -77,6 +77,13 @@ class I18n {
           menuToggleTheme: this._locale.menuToggleTheme,
           menuToggleFullscreen: this._locale.menuToggleFullscreen,
           menuSettings: this._locale.menuSettings,
+          menuAbout: this._locale.menuAbout,
+          menuUndo: this._locale.menuUndo,
+          menuRedo: this._locale.menuRedo,
+          menuFind: this._locale.menuFind,
+          menuFindReplace: this._locale.menuFindReplace,
+          menuSyncFile: this._locale.menuSyncFile,
+          menuMarkSync: this._locale.menuMarkSync,
         },
       }).then(() => {
         console.log('[i18n] native menu updated successfully');

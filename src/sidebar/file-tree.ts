@@ -1,21 +1,51 @@
 import type { FileTreeNode } from '../file/fs';
+import type { SyncFileStatus } from '../sync/sync-manager';
+import { i18n } from '../i18n';
 
 export class FileTree {
   private el: HTMLElement;
   private currentFile: string | null = null;
   private expandedPaths: Set<string> = new Set();
+  private syncStatuses: Map<string, SyncFileStatus> = new Map();
+  private lastTree: FileTreeNode | null = null;
   public onFileSelect?: (path: string) => void;
+  public onSyncFile?: (path: string) => void;
+  public onUnsyncFile?: (path: string) => void;
+  public syncEnabled = false;
 
   constructor(container: HTMLElement) {
-    this.el = container;
+    this.el = document.createElement('div');
     this.el.style.cssText = `
       overflow-y: auto;
       height: 100%;
       padding: 8px 0;
     `;
+    container.appendChild(this.el);
+  }
+
+  updateSyncStatuses(statuses: Map<string, SyncFileStatus>): void {
+    this.syncStatuses = statuses;
+    // Update existing sync icons without full re-render
+    const items = this.el.querySelectorAll('.file-tree-item[data-filepath]');
+    items.forEach((item) => {
+      const el = item as HTMLElement;
+      const path = el.dataset.filepath!;
+      const iconEl = el.querySelector('.sync-icon') as HTMLElement;
+      const status = this.syncStatuses.get(path);
+      if (iconEl) {
+        if (status) {
+          iconEl.textContent = status === 'synced' ? '\u2713' : status === 'syncing' ? '\u21bb' : '\u2717';
+          iconEl.style.color = status === 'synced' ? '#38a169' : status === 'syncing' ? 'var(--accent, #0366d6)' : '#e53e3e';
+          iconEl.style.display = '';
+        } else {
+          iconEl.style.display = 'none';
+        }
+      }
+    });
   }
 
   render(tree: FileTreeNode): void {
+    this.lastTree = tree;
     this.el.innerHTML = '';
 
     const header = document.createElement('div');
@@ -104,9 +134,22 @@ export class FileTree {
 
         const nameSpan = document.createElement('span');
         nameSpan.textContent = node.name;
+        nameSpan.style.flex = '1';
+
+        // Sync status icon (only shown for synced files)
+        const syncIcon = document.createElement('span');
+        syncIcon.className = 'sync-icon';
+        const fileStatus = this.syncStatuses.get(node.path);
+        if (fileStatus) {
+          syncIcon.textContent = fileStatus === 'synced' ? '\u2713' : fileStatus === 'syncing' ? '\u21bb' : '\u2717';
+          syncIcon.style.cssText = `font-size: 11px; flex-shrink: 0; color: ${fileStatus === 'synced' ? '#38a169' : fileStatus === 'syncing' ? 'var(--accent, #0366d6)' : '#e53e3e'};`;
+        } else {
+          syncIcon.style.display = 'none';
+        }
 
         item.appendChild(icon);
         item.appendChild(nameSpan);
+        item.appendChild(syncIcon);
 
         item.addEventListener('click', () => {
           this.setActiveFile(node.path);
@@ -122,6 +165,12 @@ export class FileTree {
           if (this.currentFile !== node.path) {
             item.style.background = 'transparent';
           }
+        });
+
+        // Right-click context menu for files
+        item.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          this.showFileContextMenu(e, node);
         });
 
         item.dataset.filepath = node.path;
@@ -204,6 +253,81 @@ export class FileTree {
         menu.remove();
         item.action();
       });
+      menu.appendChild(btn);
+    }
+
+    document.body.appendChild(menu);
+    const close = (ev: MouseEvent) => {
+      if (!menu.contains(ev.target as Node)) {
+        menu.remove();
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+
+  private showFileContextMenu(e: MouseEvent, node: FileTreeNode): void {
+    document.querySelector('.ctx-menu')?.remove();
+
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.style.cssText = `
+      position: fixed;
+      left: ${e.clientX}px;
+      top: ${e.clientY}px;
+      background: var(--bg-elevated, #fff);
+      border: 1px solid var(--border-color, #e8e8e8);
+      border-radius: 6px;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      z-index: 200;
+      min-width: 150px;
+    `;
+
+    const items: { label: string; action: () => void }[] = [];
+
+    // Open file
+    items.push({
+      label: i18n.t.menuOpen,
+      action: () => {
+        this.setActiveFile(node.path);
+        this.onFileSelect?.(node.path);
+      },
+    });
+
+    // Sync options (only if WebDAV is configured)
+    if (this.syncEnabled) {
+      const isSynced = this.syncStatuses.has(node.path);
+      if (isSynced) {
+        items.push({
+          label: i18n.t.unsyncFromWebdav,
+          action: () => this.onUnsyncFile?.(node.path),
+        });
+      } else {
+        items.push({
+          label: i18n.t.syncToWebdav,
+          action: () => this.onSyncFile?.(node.path),
+        });
+      }
+    }
+
+    for (const item of items) {
+      const btn = document.createElement('button');
+      btn.textContent = item.label;
+      btn.style.cssText = `
+        display: block;
+        width: 100%;
+        padding: 6px 12px;
+        border: none;
+        background: transparent;
+        color: var(--text-primary, #333);
+        cursor: pointer;
+        font-size: 12px;
+        text-align: left;
+      `;
+      btn.addEventListener('mouseenter', () => { btn.style.background = 'var(--sidebar-hover, #e8e8e8)'; });
+      btn.addEventListener('mouseleave', () => { btn.style.background = 'transparent'; });
+      btn.addEventListener('click', () => { menu.remove(); item.action(); });
       menu.appendChild(btn);
     }
 

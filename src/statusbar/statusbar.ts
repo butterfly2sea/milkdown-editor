@@ -12,6 +12,7 @@ export class StatusBar {
   private exportBtn: HTMLButtonElement;
   private modeBtn: HTMLButtonElement;
   private langBtn: HTMLButtonElement;
+  private syncBtn: HTMLButtonElement;
   private _viewMode: ViewMode = 'wysiwyg';
   private _lastWordCount = 0;
   private _lastCharCount = 0;
@@ -21,6 +22,7 @@ export class StatusBar {
   public onThemeToggle?: () => void;
   public onExport?: (format: 'html' | 'pdf') => void;
   public onViewModeToggle?: (mode: ViewMode) => void;
+  public onSyncClick?: () => void;
 
   constructor(container: HTMLElement) {
     this.el = container;
@@ -92,6 +94,16 @@ export class StatusBar {
     this.exportBtn.addEventListener('click', () => this.showExportMenu());
     this.applyBtnStyles(this.exportBtn);
 
+    // Sync status button
+    this.syncBtn = document.createElement('button');
+    this.syncBtn.className = 'statusbar-btn';
+    this.syncBtn.title = i18n.t.syncStatusIdle;
+    this.syncBtn.textContent = '';
+    this.syncBtn.style.cssText = 'display: none;';
+    this.applyBtnStyles(this.syncBtn);
+    this.syncBtn.addEventListener('click', () => this.onSyncClick?.());
+
+    this.rightEl.appendChild(this.syncBtn);
     this.rightEl.appendChild(this.langBtn);
     this.rightEl.appendChild(this.themeBtn);
     this.rightEl.appendChild(this.exportBtn);
@@ -119,6 +131,23 @@ export class StatusBar {
     this._lastLine = line;
     this._lastCol = col;
     this.renderCursorPos();
+  }
+
+  updateSyncStatus(status: 'idle' | 'syncing' | 'error' | 'disabled'): void {
+    if (status === 'disabled') {
+      this.syncBtn.style.display = 'none';
+      return;
+    }
+    this.syncBtn.style.display = '';
+    const icons: Record<string, string> = { idle: '\u2601', syncing: '\u21bb', error: '\u2601\u2717' };
+    this.syncBtn.textContent = icons[status] || '';
+    const titles: Record<string, string> = {
+      idle: i18n.t.syncStatusIdle,
+      syncing: i18n.t.syncStatusSyncing,
+      error: i18n.t.syncStatusError,
+    };
+    this.syncBtn.title = titles[status] || '';
+    this.syncBtn.style.color = status === 'error' ? '#e53e3e' : 'var(--text-secondary)';
   }
 
   updateThemeIcon(): void {

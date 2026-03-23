@@ -6,6 +6,8 @@ export interface KeymapHandlers {
   toggleSidebar?: () => void;
   toggleTheme?: () => void;
   exportMenu?: () => void;
+  find?: () => void;
+  findReplace?: () => void;
 }
 
 export function registerKeymap(handlers: KeymapHandlers): () => void {
@@ -33,6 +35,12 @@ export function registerKeymap(handlers: KeymapHandlers): () => void {
     } else if (ctrl && e.shiftKey && e.key === 'E') {
       e.preventDefault();
       handlers.exportMenu?.();
+    } else if (ctrl && !e.shiftKey && e.key === 'f') {
+      e.preventDefault();
+      handlers.find?.();
+    } else if (ctrl && e.key === 'h') {
+      e.preventDefault();
+      handlers.findReplace?.();
     }
   };
 

@@ -1,8 +1,8 @@
-export function exportHTML(
+export async function exportHTML(
   editorRoot: HTMLElement,
   theme: 'light' | 'dark',
   title: string,
-): void {
+): Promise<void> {
   // Clone editor content DOM
   const contentClone = editorRoot.cloneNode(true) as HTMLElement;
 
@@ -95,13 +95,27 @@ ${contentClone.innerHTML}
 </html>`;
 
   // Download
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = title.replace(/\.md$/, '') + '.html';
-  a.click();
-  URL.revokeObjectURL(url);
+  if ('__TAURI_INTERNALS__' in window) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const defaultName = title.replace(/\.md$/, '') + '.html';
+    const path = await save({
+      defaultPath: defaultName,
+      filters: [{ name: 'HTML', extensions: ['html'] }],
+    });
+    if (path) {
+      await writeTextFile(path, html);
+    }
+  } else {
+    // Browser fallback
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = title.replace(/\.md$/, '') + '.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function escapeHtml(text: string): string {

@@ -3,7 +3,11 @@ import '@milkdown/crepe/theme/frame.css';
 import './styles/global.css';
 import './styles/editor-overrides.css';
 
-import { createEditor, getCursorInfo } from './editor/setup';
+import { createEditor, getCursorInfo, editorUndo, editorRedo, getHeadings, scrollToPos } from './editor/setup';
+import { SearchBar } from './editor/search';
+import { SidebarTabs } from './sidebar/sidebar-tabs';
+import { TableOfContents } from './sidebar/toc';
+import { RemoteFileTree } from './sidebar/remote-tree';
 import { TitleBar } from './titlebar/titlebar';
 import { StatusBar } from './statusbar/statusbar';
 import { registerKeymap } from './editor/keymap';
@@ -12,7 +16,9 @@ import { FileTree } from './sidebar/file-tree';
 import { exportHTML } from './file/export-html';
 import { exportPDF } from './file/export-pdf';
 import { i18n } from './i18n';
-import { initPlantUMLServerFromStorage, showSettingsModal } from './settings/settings-modal';
+import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange } from './settings/settings-modal';
+import { SyncManager } from './sync/sync-manager';
+import { showAboutModal } from './about/about-modal';
 
 const defaultContent = '';
 
@@ -42,11 +48,15 @@ async function main() {
   // Initialize UI components
   const titleBar = new TitleBar(titlebarEl);
   const statusBar = new StatusBar(statusbarEl);
-  const fileTree = new FileTree(sidebarEl);
   const fileManager = new FileManager();
+
+  // Initialize sidebar tabs first, then create FileTree inside the files container
+  const sidebarTabs = new SidebarTabs(sidebarEl);
+  const fileTree = new FileTree(sidebarTabs.filesEl);
 
   // Initialize editor (use let + reassign to avoid referencing before init)
   let editorReady = false;
+  let onContentChange: (() => void) | null = null;
   let editorInstance: Awaited<ReturnType<typeof createEditor>> | null = null;
   const editor = await createEditor(root, defaultContent, (markdown) => {
     // Skip change tracking during initial editor creation
@@ -66,6 +76,9 @@ async function main() {
     if (reallyChanged) {
       fileManager.scheduleAutoSave(markdown);
     }
+
+    // Notify content change listeners (e.g., TOC update)
+    onContentChange?.();
   });
   editorInstance = editor;
   // Expose for testing/debugging
@@ -115,6 +128,10 @@ async function main() {
     if (success) {
       titleBar.setFileName(fileManager.currentFileName);
       titleBar.setUnsaved(false);
+      // Upload to WebDAV after save
+      if (fileManager.currentPath) {
+        syncManager.uploadFile(fileManager.currentPath, md).catch(console.error);
+      }
     }
   };
 
@@ -145,6 +162,7 @@ async function main() {
     if (tree) {
       sidebarEl.classList.add('open');
       fileTree.render(tree);
+      sidebarTabs.setActiveTab('files');
     }
   };
 
@@ -152,6 +170,44 @@ async function main() {
   fileTree.onFileSelect = (path) => {
     openFile(path);
   };
+
+  // -- WebDAV Sync --
+  const syncManager = new SyncManager();
+  syncManager.onStatusChange = (status) => {
+    statusBar.updateSyncStatus(status);
+  };
+  syncManager.onFileStatusChange = (statuses) => {
+    fileTree.updateSyncStatuses(statuses);
+  };
+  syncManager.onConflict = async (fileName) => {
+    const msg = `${i18n.t.webdavConflict}: ${fileName}\n\n1. ${i18n.t.webdavKeepLocal}\n2. ${i18n.t.webdavKeepRemote}`;
+    const choice = confirm(msg);
+    return choice ? 'local' : 'remote';
+  };
+  syncManager.init();
+  fileTree.syncEnabled = syncManager.isConfigured;
+  statusBar.onSyncClick = () => syncManager.sync();
+
+  // File tree sync callbacks
+  fileTree.onSyncFile = async (path) => {
+    if (!syncManager.isConfigured) return;
+    const config = (await import('./sync/sync-config')).getSyncConfig();
+    if (!config) return;
+    // Build remote path from local file name
+    const fileName = path.replace(/\\/g, '/').split('/').pop() || '';
+    const remotePath = config.remotePath.replace(/\/+$/, '') + '/' + fileName;
+    await syncManager.markForSync(path, remotePath);
+  };
+  fileTree.onUnsyncFile = (path) => {
+    syncManager.unmarkSync(path);
+  };
+
+  // Re-init sync when config changes in settings
+  setOnSyncConfigChange(() => {
+    syncManager.restart();
+    fileTree.syncEnabled = syncManager.isConfigured;
+    initRemoteTree();
+  });
 
   // -- Theme --
 
@@ -170,6 +226,62 @@ async function main() {
     document.documentElement.setAttribute('data-theme', 'dark');
   }
   statusBar.updateThemeIcon();
+
+  // -- Search bar --
+  const searchBar = new SearchBar(root);
+  searchBar.setEditor(editor.crepe);
+
+  // -- TOC --
+  const toc = new TableOfContents(sidebarTabs.tocEl);
+  toc.onHeadingClick = (pos) => {
+    scrollToPos(editor.crepe, pos);
+  };
+
+  // Update TOC on content changes (debounced)
+  let tocTimer: ReturnType<typeof setTimeout> | null = null;
+  const updateToc = () => {
+    if (tocTimer) clearTimeout(tocTimer);
+    tocTimer = setTimeout(() => {
+      const headings = getHeadings(editor.crepe);
+      toc.update(headings);
+    }, 300);
+  };
+  // Wire up TOC updates on content change
+  onContentChange = updateToc;
+  // Initial TOC
+  updateToc();
+
+  // -- Remote file tree --
+  const remoteTree = new RemoteFileTree(sidebarTabs.remoteEl);
+  remoteTree.onDownload = async (remotePath, fileName) => {
+    // Ask user where to save
+    const { save: saveDlg } = await import('@tauri-apps/plugin-dialog');
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const localPath = await saveDlg({
+      defaultPath: fileName,
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+    });
+    if (!localPath) return;
+    await syncManager.downloadAndMap(remotePath, localPath);
+    // Open the downloaded file
+    await openFile(localPath);
+  };
+
+  // Initialize remote tree when sync is configured
+  const initRemoteTree = async () => {
+    if (syncManager.isConfigured) {
+      const config = (await import('./sync/sync-config')).getSyncConfig();
+      remoteTree.setClient(syncManager.webdavClient, config?.remotePath || '/');
+    }
+  };
+  initRemoteTree();
+
+  // Refresh remote tree when switching to Remote tab
+  sidebarTabs.onTabChange = (tab) => {
+    if (tab === 'remote' && syncManager.isConfigured) {
+      remoteTree.refresh().catch(console.error);
+    }
+  };
 
   // -- Sidebar --
 
@@ -230,13 +342,13 @@ async function main() {
   // -- Status bar callbacks --
 
   statusBar.onThemeToggle = toggleTheme;
-  statusBar.onExport = (format) => {
+  statusBar.onExport = async (format) => {
     const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
     const title = fileManager.currentFileName;
     if (format === 'html') {
-      exportHTML(root, theme, title);
+      await exportHTML(root, theme, title);
     } else {
-      exportPDF(root, theme, title);
+      await exportPDF(root, theme, title);
     }
   };
 
@@ -255,6 +367,8 @@ async function main() {
       ) as HTMLButtonElement;
       exportBtn?.click();
     },
+    find: () => searchBar.show(false),
+    findReplace: () => searchBar.show(true),
   });
 
   // Warn before leaving with unsaved changes
@@ -312,11 +426,30 @@ async function main() {
         'menu-save-as': () => saveAs(),
         'menu-export-html': () => {
           const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-          exportHTML(root, theme, fileManager.currentFileName);
+          exportHTML(root, theme, fileManager.currentFileName).catch(console.error);
         },
         'menu-export-pdf': () => {
           const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-          exportPDF(root, theme, fileManager.currentFileName);
+          exportPDF(root, theme, fileManager.currentFileName).catch(console.error);
+        },
+        'menu-undo': () => editorUndo(editor.crepe),
+        'menu-redo': () => editorRedo(editor.crepe),
+        'menu-find': () => searchBar.show(false),
+        'menu-find-replace': () => searchBar.show(true),
+        'menu-sync-file': () => {
+          if (fileManager.currentPath) {
+            syncManager.sync().catch(console.error);
+          }
+        },
+        'menu-mark-sync': () => {
+          if (fileManager.currentPath) {
+            const isSynced = syncManager.fileStatuses.has(fileManager.currentPath);
+            if (isSynced) {
+              syncManager.unmarkSync(fileManager.currentPath);
+            } else {
+              fileTree.onSyncFile?.(fileManager.currentPath);
+            }
+          }
         },
         'menu-toggle-sidebar': () => toggleSidebar(),
         'menu-toggle-theme': () => toggleTheme(),
@@ -329,6 +462,7 @@ async function main() {
         'menu-lang-en': () => i18n.setLang('en'),
         'menu-lang-zh': () => i18n.setLang('zh'),
         'menu-settings': () => showSettingsModal(),
+        'menu-about': () => showAboutModal(),
       };
 
       for (const [event, handler] of Object.entries(menuHandlers)) {

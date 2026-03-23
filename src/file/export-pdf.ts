@@ -1,8 +1,8 @@
-export function exportPDF(
+export async function exportPDF(
   editorRoot: HTMLElement,
   theme: 'light' | 'dark',
   title: string,
-): void {
+): Promise<void> {
   // Get computed theme values
   const computedStyle = getComputedStyle(document.documentElement);
   const cssVars = [
@@ -72,27 +72,42 @@ export function exportPDF(
 <body>${contentClone.innerHTML}</body>
 </html>`;
 
-  // Create iframe for printing
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position: fixed; top: -10000px; left: -10000px; width: 800px; height: 600px;';
-  document.body.appendChild(iframe);
+  if ('__TAURI_INTERNALS__' in window) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const defaultName = title.replace(/\.md$/, '') + '.pdf.html';
+    const path = await save({
+      defaultPath: defaultName,
+      filters: [
+        { name: 'HTML (print to PDF)', extensions: ['html'] },
+      ],
+    });
+    if (path) {
+      await writeTextFile(path, html);
+    }
+  } else {
+    // Browser fallback: use iframe print
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position: fixed; top: -10000px; left: -10000px; width: 800px; height: 600px;';
+    document.body.appendChild(iframe);
 
-  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!iframeDoc) {
-    iframe.remove();
-    return;
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      iframe.remove();
+      return;
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+
+    // Wait for content to load, then print
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        // Remove iframe after a delay to allow print dialog
+        setTimeout(() => iframe.remove(), 1000);
+      }, 250);
+    };
   }
-
-  iframeDoc.open();
-  iframeDoc.write(html);
-  iframeDoc.close();
-
-  // Wait for content to load, then print
-  iframe.onload = () => {
-    setTimeout(() => {
-      iframe.contentWindow?.print();
-      // Remove iframe after a delay to allow print dialog
-      setTimeout(() => iframe.remove(), 1000);
-    }, 250);
-  };
 }

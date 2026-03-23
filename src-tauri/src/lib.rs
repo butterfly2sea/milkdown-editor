@@ -18,6 +18,13 @@ struct MenuLabels {
     menu_toggle_theme: String,
     menu_toggle_fullscreen: String,
     menu_settings: String,
+    menu_about: String,
+    menu_undo: String,
+    menu_redo: String,
+    menu_find: String,
+    menu_find_replace: String,
+    menu_sync_file: String,
+    menu_mark_sync: String,
 }
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::menu::Menu<tauri::Wry> {
@@ -38,17 +45,23 @@ fn build_menu_with_labels(app: &tauri::AppHandle, labels: &MenuLabels) -> tauri:
         .item(&MenuItemBuilder::with_id("export-html", &labels.menu_export_html).build(app).unwrap())
         .item(&MenuItemBuilder::with_id("export-pdf", &labels.menu_export_pdf).build(app).unwrap())
         .separator()
+        .item(&MenuItemBuilder::with_id("sync-file", &labels.menu_sync_file).build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("mark-sync", &labels.menu_mark_sync).build(app).unwrap())
+        .separator()
         .item(&PredefinedMenuItem::quit(app, None).unwrap())
         .build().unwrap();
 
     let edit_menu = SubmenuBuilder::new(app, &labels.menu_edit)
-        .item(&PredefinedMenuItem::undo(app, None).unwrap())
-        .item(&PredefinedMenuItem::redo(app, None).unwrap())
+        .item(&MenuItemBuilder::with_id("undo", &labels.menu_undo).accelerator("CmdOrCtrl+Z").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("redo", &labels.menu_redo).accelerator("CmdOrCtrl+Shift+Z").build(app).unwrap())
         .separator()
         .item(&PredefinedMenuItem::cut(app, None).unwrap())
         .item(&PredefinedMenuItem::copy(app, None).unwrap())
         .item(&PredefinedMenuItem::paste(app, None).unwrap())
         .item(&PredefinedMenuItem::select_all(app, None).unwrap())
+        .separator()
+        .item(&MenuItemBuilder::with_id("find", &labels.menu_find).accelerator("CmdOrCtrl+F").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("find-replace", &labels.menu_find_replace).accelerator("CmdOrCtrl+H").build(app).unwrap())
         .build().unwrap();
 
     let lang_submenu = SubmenuBuilder::new(app, "Language / 语言")
@@ -68,7 +81,7 @@ fn build_menu_with_labels(app: &tauri::AppHandle, labels: &MenuLabels) -> tauri:
         .build().unwrap();
 
     let help_menu = SubmenuBuilder::new(app, &labels.menu_help)
-        .item(&PredefinedMenuItem::about(app, None, None).unwrap())
+        .item(&MenuItemBuilder::with_id("about", &labels.menu_about).build(app).unwrap())
         .build().unwrap();
 
     MenuBuilder::new(app)
@@ -116,6 +129,13 @@ fn default_labels() -> MenuLabels {
         menu_toggle_theme: "Toggle Theme".into(),
         menu_toggle_fullscreen: "Toggle Fullscreen".into(),
         menu_settings: "Settings...".into(),
+        menu_about: "About".into(),
+        menu_undo: "Undo".into(),
+        menu_redo: "Redo".into(),
+        menu_find: "Find...".into(),
+        menu_find_replace: "Find and Replace...".into(),
+        menu_sync_file: "Sync Current File".into(),
+        menu_mark_sync: "Mark for Sync".into(),
     }
 }
 
@@ -129,6 +149,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // When another instance is launched with a file path, forward to the existing window
             for arg in args.iter().skip(1) {
