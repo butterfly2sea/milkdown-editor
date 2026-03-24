@@ -1,9 +1,9 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
-import { editorViewCtx } from '@milkdown/kit/core';
-import { replaceAll } from '@milkdown/kit/utils';
+import { editorViewCtx, parserCtx } from '@milkdown/kit/core';
 import { undo as pmUndo, redo as pmRedo } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
+import { Slice } from 'prosemirror-model';
 import { mathPlugins } from './plugins/math-plugin';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
 import { createSearchPlugin } from './search';
@@ -54,7 +54,18 @@ export async function createEditor(
   };
 
   const setMarkdown = (md: string): void => {
-    crepe.editor.action(replaceAll(md));
+    crepe.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const parser = ctx.get(parserCtx);
+      const doc = parser(md);
+      if (!doc) return;
+      const tr = view.state.tr.replace(
+        0, view.state.doc.content.size,
+        new Slice(doc.content, 0, 0)
+      );
+      tr.setMeta('addToHistory', false);
+      view.dispatch(tr);
+    });
   };
 
   const destroy = async (): Promise<void> => {
@@ -115,9 +126,16 @@ export function scrollToPos(crepe: Crepe, pos: number): void {
   try {
     crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
-      const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(pos)));
+      const targetPos = Math.min(pos + 1, view.state.doc.content.size);
+      const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(targetPos)));
       view.dispatch(tr.scrollIntoView());
       view.focus();
+      // Also scroll the outer container
+      setTimeout(() => {
+        const domNode = view.domAtPos(targetPos);
+        const el = domNode.node instanceof HTMLElement ? domNode.node : domNode.node.parentElement;
+        el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }, 50);
     });
   } catch { /* editor not ready */ }
 }
