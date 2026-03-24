@@ -14,7 +14,7 @@ import { registerKeymap } from './editor/keymap';
 import { FileManager } from './file/fs';
 import { FileTree } from './sidebar/file-tree';
 import { exportHTML } from './file/export-html';
-import { exportPDF } from './file/export-pdf';
+
 import { i18n } from './i18n';
 import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange } from './settings/settings-modal';
 import { SyncManager } from './sync/sync-manager';
@@ -86,6 +86,20 @@ async function main() {
   // Mark editor as ready after initial setup to avoid false "unsaved" state
   requestAnimationFrame(() => { editorReady = true; });
 
+  // Update cursor position on click/key navigation
+  const updateCursorPos = () => {
+    if (editorInstance) {
+      const { line, col } = getCursorInfo(editorInstance.crepe);
+      statusBar.updateCursorPosition(line, col);
+    }
+  };
+  root.addEventListener('click', updateCursorPos);
+  root.addEventListener('keyup', (e) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+      updateCursorPos();
+    }
+  });
+
   // Set base content for change tracking
   fileManager.setBaseContent(defaultContent);
 
@@ -108,11 +122,13 @@ async function main() {
     }
     const content = await fileManager.openFile(path);
     if (content !== undefined) {
+      editorReady = false;  // Suppress onChange during load
       editor.setMarkdown(content);
       root.scrollTop = 0;
       titleBar.setFileName(fileManager.currentFileName);
       titleBar.setUnsaved(false);
       statusBar.updateWordCount(content);
+      requestAnimationFrame(() => { editorReady = true; });
     }
   };
 
@@ -150,11 +166,13 @@ async function main() {
     }
     fileManager.newFile();
     const newContent = '# Untitled\n\n';
+    editorReady = false;  // Suppress onChange during load
     editor.setMarkdown(newContent);
     root.scrollTop = 0;
     fileManager.setBaseContent(newContent);
     titleBar.setFileName(i18n.t.untitled);
     titleBar.setUnsaved(false);
+    requestAnimationFrame(() => { editorReady = true; });
   };
 
   const openFolder = async () => {
@@ -186,6 +204,7 @@ async function main() {
   };
   syncManager.init();
   fileTree.syncEnabled = syncManager.isConfigured;
+  sidebarTabs.setTabVisible('remote', syncManager.isConfigured);
   statusBar.onSyncClick = () => syncManager.sync();
 
   // File tree sync callbacks
@@ -193,9 +212,12 @@ async function main() {
     if (!syncManager.isConfigured) return;
     const config = (await import('./sync/sync-config')).getSyncConfig();
     if (!config) return;
-    // Build remote path from local file name
+    // Show remote folder picker for user to choose destination
+    const { showRemoteFolderPicker } = await import('./sync/remote-folder-picker');
+    const remoteFolder = await showRemoteFolderPicker(syncManager.webdavClient, config.remotePath || '/');
+    if (!remoteFolder) return;
     const fileName = path.replace(/\\/g, '/').split('/').pop() || '';
-    const remotePath = config.remotePath.replace(/\/+$/, '') + '/' + fileName;
+    const remotePath = remoteFolder.replace(/\/+$/, '') + '/' + fileName;
     await syncManager.markForSync(path, remotePath);
   };
   fileTree.onUnsyncFile = (path) => {
@@ -206,6 +228,7 @@ async function main() {
   setOnSyncConfigChange(() => {
     syncManager.restart();
     fileTree.syncEnabled = syncManager.isConfigured;
+    sidebarTabs.setTabVisible('remote', syncManager.isConfigured);
     initRemoteTree();
   });
 
@@ -343,12 +366,10 @@ async function main() {
 
   statusBar.onThemeToggle = toggleTheme;
   statusBar.onExport = async (format) => {
-    const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-    const title = fileManager.currentFileName;
     if (format === 'html') {
-      await exportHTML(root, theme, title);
-    } else {
-      await exportPDF(root, theme, title);
+      const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
+      const title = fileManager.currentFileName;
+      await exportHTML(getContent(), theme, title);
     }
   };
 
@@ -426,11 +447,7 @@ async function main() {
         'menu-save-as': () => saveAs(),
         'menu-export-html': () => {
           const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-          exportHTML(root, theme, fileManager.currentFileName).catch(console.error);
-        },
-        'menu-export-pdf': () => {
-          const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-          exportPDF(root, theme, fileManager.currentFileName).catch(console.error);
+          exportHTML(getContent(), theme, fileManager.currentFileName).catch(console.error);
         },
         'menu-undo': () => editorUndo(editor.crepe),
         'menu-redo': () => editorRedo(editor.crepe),

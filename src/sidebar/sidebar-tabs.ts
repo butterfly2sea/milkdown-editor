@@ -90,6 +90,15 @@ export class SidebarTabs {
     return this.activeTab;
   }
 
+  setTabVisible(tab: SidebarTab, visible: boolean): void {
+    const btn = tab === 'files' ? this.filesBtn : tab === 'toc' ? this.tocBtn : this.remoteBtn;
+    btn.style.display = visible ? '' : 'none';
+    // If hiding the active tab, switch to another
+    if (!visible && this.activeTab === tab) {
+      this.setActiveTab(tab === 'files' ? 'toc' : 'files');
+    }
+  }
+
   private updateTabStyles(): void {
     const activeStyle = 'border-bottom: 2px solid var(--accent, #0366d6); color: var(--accent, #0366d6);';
     const inactiveStyle = 'border-bottom: 2px solid transparent; color: var(--text-muted, #999);';
