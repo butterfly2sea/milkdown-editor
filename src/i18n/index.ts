@@ -72,7 +72,6 @@ class I18n {
           menuSave: this._locale.menuSave,
           menuSaveAs: this._locale.menuSaveAs,
           menuExportHtml: this._locale.menuExportHTML,
-          menuExportPdf: this._locale.menuExportPDF,
           menuToggleSidebar: this._locale.menuToggleSidebar,
           menuToggleTheme: this._locale.menuToggleTheme,
           menuToggleFullscreen: this._locale.menuToggleFullscreen,
