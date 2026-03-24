@@ -186,7 +186,7 @@ export class StatusBar {
 
   private getThemeIcon(): string {
     const theme = document.documentElement.getAttribute('data-theme');
-    return theme === 'dark' ? '☀' : '☾';
+    return theme === 'dark' ? '☾' : '☀';
   }
 
   private showLangMenu(): void {
@@ -265,7 +265,6 @@ export class StatusBar {
 
     const items = [
       { label: i18n.t.exportHTML, format: 'html' as const },
-      { label: i18n.t.exportPDF, format: 'pdf' as const },
     ];
 
     for (const item of items) {
