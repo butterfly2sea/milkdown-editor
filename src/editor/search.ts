@@ -307,6 +307,12 @@ export class SearchBar {
       const view = ctx.get(editorViewCtx);
       const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to));
       view.dispatch(tr.scrollIntoView());
+      // Scroll outer container
+      setTimeout(() => {
+        const domNode = view.domAtPos(match.from);
+        const el = domNode.node instanceof HTMLElement ? domNode.node : domNode.node.parentElement;
+        el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }, 50);
     });
   }
 
