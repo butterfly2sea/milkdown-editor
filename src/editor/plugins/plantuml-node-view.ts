@@ -35,6 +35,78 @@ function svgToPngBlob(svgEl: SVGElement, scale = 2): Promise<Blob> {
   });
 }
 
+function showFullscreenSvg(svgEl: SVGElement): void {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2000; cursor: grab;
+  `;
+
+  const container = document.createElement('div');
+  container.style.cssText = 'transform-origin: center; transition: none;';
+  const clone = svgEl.cloneNode(true) as SVGElement;
+  clone.style.maxWidth = '90vw';
+  clone.style.maxHeight = '90vh';
+  clone.style.width = 'auto';
+  clone.style.height = 'auto';
+  container.appendChild(clone);
+  overlay.appendChild(container);
+
+  let scale = 1;
+  let translateX = 0;
+  let translateY = 0;
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+
+  const updateTransform = () => {
+    container.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+  };
+
+  overlay.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    scale = Math.max(0.1, Math.min(10, scale * delta));
+    updateTransform();
+  }, { passive: false });
+
+  overlay.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      dragging = true;
+      startX = e.clientX - translateX;
+      startY = e.clientY - translateY;
+      overlay.style.cursor = 'grabbing';
+    }
+  });
+
+  overlay.addEventListener('mousemove', (e) => {
+    if (dragging) {
+      translateX = e.clientX - startX;
+      translateY = e.clientY - startY;
+      updateTransform();
+    }
+  });
+
+  overlay.addEventListener('mouseup', () => {
+    dragging = false;
+    overlay.style.cursor = 'grab';
+  });
+
+  // Close on Escape or click outside SVG
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') close();
+  };
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKeyDown);
+  };
+  overlay.addEventListener('dblclick', close);
+  document.addEventListener('keydown', onKeyDown);
+
+  document.body.appendChild(overlay);
+}
+
 export function createPlantUMLNodeView(): NodeViewConstructor {
   return (node, view, getPos) => {
     let currentValue: string = node.attrs.value || '';
@@ -167,6 +239,14 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
     // Click preview to edit
     previewEl.addEventListener('click', () => {
       setEditing(true);
+    });
+
+    // Double-click preview to fullscreen view
+    previewEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const svgEl = previewEl.querySelector('svg');
+      if (!svgEl) return;
+      showFullscreenSvg(svgEl as SVGElement);
     });
 
     dom.appendChild(previewEl);
