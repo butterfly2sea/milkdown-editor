@@ -17,6 +17,7 @@ export interface Locale {
   unsavedWarning: string;
   fileName: string;
   newFile: string;
+  newFolder: string;
   createFailed: string;
 
   // Sidebar
@@ -137,6 +138,7 @@ export const en: Locale = {
   unsavedWarning: 'You have unsaved changes. Discard them?',
   fileName: 'File name:',
   newFile: 'New File',
+  newFolder: 'New Folder',
   createFailed: 'Failed to create file',
   newFileMenu: 'New File',
   plantumlPlaceholder: 'Enter PlantUML code to preview',
@@ -233,6 +235,7 @@ export const zh: Locale = {
   unsavedWarning: '有未保存的更改，是否丢弃？',
   fileName: '文件名：',
   newFile: '新建文件',
+  newFolder: '新建文件夹',
   createFailed: '创建文件失败',
   newFileMenu: '新建文件',
   plantumlPlaceholder: '输入 PlantUML 代码以预览',

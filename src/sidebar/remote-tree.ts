@@ -32,6 +32,10 @@ export class RemoteFileTree {
     header.style.cssText = 'padding: 4px 12px 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted, #999); letter-spacing: 0.5px;';
     header.textContent = 'WebDAV';
     this.el.appendChild(header);
+    // Ensure remote root directory exists before listing
+    try {
+      await this.client.mkdir(this.rootPath);
+    } catch { /* ignore - may already exist */ }
     // Load root
     await this.loadDirectory(this.rootPath, this.el, 0);
   }
@@ -51,7 +55,8 @@ export class RemoteFileTree {
         this.showMessage('(empty)', container);
       }
     } catch (err) {
-      this.showMessage('Failed to load', container);
+      const msg = err instanceof Error ? err.message : 'Failed to load';
+      this.showMessage(msg, container);
     }
   }
 

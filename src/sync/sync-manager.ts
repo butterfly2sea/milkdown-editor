@@ -62,6 +62,9 @@ export class SyncManager {
     addSyncMapping(localPath, remotePath);
     this.setFileStatus(localPath, 'syncing');
     try {
+      // Ensure remote directory exists
+      const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
+      if (remoteDir) await this.client.mkdir(remoteDir);
       const content = await readTextFile(localPath);
       await this.client.putFile(remotePath, content);
       const info = await stat(localPath);

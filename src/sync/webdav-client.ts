@@ -44,8 +44,16 @@ export class WebDAVClient {
     const responses = doc.getElementsByTagNameNS(davNs, 'response');
     const results: RemoteFileInfo[] = [];
 
-    // Normalize the request path for comparison so we can skip the directory itself
-    const normalizedBase = remotePath.replace(/\/+$/, '');
+    // Build the full request URL path to compare against hrefs for skipping the directory itself
+    let requestUrlPath: string;
+    try {
+      const basePathname = new URL(this.baseUrl).pathname.replace(/\/+$/, '');
+      const normPath = ('/' + remotePath).replace(/\/+/g, '/').replace(/\/+$/, '');
+      requestUrlPath = (basePathname + normPath).replace(/\/+/g, '/');
+      if (requestUrlPath === '') requestUrlPath = '/';
+    } catch {
+      requestUrlPath = remotePath;
+    }
 
     for (let i = 0; i < responses.length; i++) {
       const responseEl = responses[i];
@@ -55,23 +63,11 @@ export class WebDAVClient {
       if (!hrefEl?.textContent) continue;
       const href = decodeURIComponent(hrefEl.textContent);
 
-      // Skip the directory entry itself
-      const hrefNormalized = href.replace(/\/+$/, '');
-      if (
-        hrefNormalized === normalizedBase ||
-        hrefNormalized.endsWith(normalizedBase)
-      ) {
-        // Also check if after removing the baseUrl prefix it matches
-        const stripped = hrefNormalized.replace(
-          new URL(this.baseUrl).pathname.replace(/\/+$/, ''),
-          '',
-        );
-        if (
-          stripped === normalizedBase ||
-          stripped.replace(/\/+$/, '') === normalizedBase
-        ) {
-          continue;
-        }
+      // Skip the directory entry itself by comparing normalized paths
+      const hrefClean = href.replace(/\/+$/, '') || '/';
+      const reqClean = requestUrlPath.replace(/\/+$/, '') || '/';
+      if (hrefClean === reqClean) {
+        continue;
       }
 
       // Find the successful propstat (status 200)
@@ -166,8 +162,9 @@ export class WebDAVClient {
     extraHeaders: Record<string, string> = {},
     body?: string,
   ): Promise<Response> {
-    const url =
-      this.baseUrl + (path.startsWith('/') ? path : '/' + path);
+    // Normalize path: remove double slashes, ensure leading slash
+    const normalizedPath = ('/' + path).replace(/\/+/g, '/');
+    const url = this.baseUrl + normalizedPath;
     return fetch(url, {
       method,
       headers: {
