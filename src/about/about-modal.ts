@@ -83,6 +83,15 @@ export function showAboutModal(): void {
     margin-bottom: 20px;
     text-decoration: none;
   `;
+  ghLink.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if ('__TAURI_INTERNALS__' in window) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_url', { url: ghLink.href }).catch(() => window.open(ghLink.href, '_blank'));
+    } else {
+      window.open(ghLink.href, '_blank');
+    }
+  });
   modal.appendChild(ghLink);
 
   // OK button
