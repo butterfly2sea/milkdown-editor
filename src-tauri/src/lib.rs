@@ -13,7 +13,6 @@ struct MenuLabels {
     menu_save: String,
     menu_save_as: String,
     menu_export_html: String,
-    menu_export_pdf: String,
     menu_toggle_sidebar: String,
     menu_toggle_theme: String,
     menu_toggle_fullscreen: String,
@@ -43,7 +42,6 @@ fn build_menu_with_labels(app: &tauri::AppHandle, labels: &MenuLabels) -> tauri:
         .item(&MenuItemBuilder::with_id("save-as", &labels.menu_save_as).accelerator("CmdOrCtrl+Shift+S").build(app).unwrap())
         .separator()
         .item(&MenuItemBuilder::with_id("export-html", &labels.menu_export_html).build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("export-pdf", &labels.menu_export_pdf).build(app).unwrap())
         .separator()
         .item(&MenuItemBuilder::with_id("sync-file", &labels.menu_sync_file).build(app).unwrap())
         .item(&MenuItemBuilder::with_id("mark-sync", &labels.menu_mark_sync).build(app).unwrap())
@@ -124,7 +122,6 @@ fn default_labels() -> MenuLabels {
         menu_save: "Save".into(),
         menu_save_as: "Save As...".into(),
         menu_export_html: "Export HTML".into(),
-        menu_export_pdf: "Export PDF".into(),
         menu_toggle_sidebar: "Toggle Sidebar".into(),
         menu_toggle_theme: "Toggle Theme".into(),
         menu_toggle_fullscreen: "Toggle Fullscreen".into(),
@@ -137,6 +134,11 @@ fn default_labels() -> MenuLabels {
         menu_sync_file: "Sync Current File".into(),
         menu_mark_sync: "Mark for Sync".into(),
     }
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -162,7 +164,7 @@ pub fn run() {
                 }
             }
         }))
-        .invoke_handler(tauri::generate_handler![update_menu])
+        .invoke_handler(tauri::generate_handler![update_menu, open_url])
         .setup(|app| {
             let menu = build_menu(&app.handle());
             app.set_menu(menu)?;
@@ -172,6 +174,7 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     use tauri::TitleBarStyle;
                     let _ = window.set_title_bar_style(TitleBarStyle::Overlay);
+                    let _ = window.set_title("");
                 }
             }
 

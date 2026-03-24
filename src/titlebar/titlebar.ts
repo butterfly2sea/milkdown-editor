@@ -34,9 +34,14 @@ export class TitleBar {
     this.nameEl.textContent = name;
     if ('__TAURI_INTERNALS__' in window) {
       import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-        const isUntitled = name === i18n.t.untitled;
-        const title = isUntitled ? 'Milkdown Editor' : `${name} — Milkdown Editor`;
-        getCurrentWindow().setTitle(title);
+        import('@tauri-apps/plugin-os').then(({ platform }) => {
+          const isUntitled = name === i18n.t.untitled;
+          const title = platform() === 'macos' ? '' : (isUntitled ? 'Milkdown Editor' : `${name} — Milkdown Editor`);
+          getCurrentWindow().setTitle(title);
+        }).catch(() => {
+          const isUntitled = name === i18n.t.untitled;
+          getCurrentWindow().setTitle(isUntitled ? 'Milkdown Editor' : `${name} — Milkdown Editor`);
+        });
       });
     }
   }
