@@ -13,8 +13,8 @@
   --text-primary: #333333;
   --text-secondary: #666666;
   --text-muted: #999999;
-  --border-color: #e8e8e8;
-  --border-subtle: #f0f0f0;
+  --border-color: #d8d8d8;
+  --border-subtle: #e8e8e8;
   --accent: #0366d6;
   --accent-hover: #0250a3;
   --code-bg: #f6f8fa;
@@ -91,8 +91,11 @@ html, body {
   overflow: hidden;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
+  box-shadow: 2px 0 6px rgba(0,0,0,0.08);
   transition: width 0.2s ease, background-color 0.2s, border-color 0.2s;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 #sidebar.open {
