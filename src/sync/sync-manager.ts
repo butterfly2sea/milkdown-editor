@@ -1,5 +1,5 @@
 import { WebDAVClient } from './webdav-client';
-import { getSyncConfig, getSyncMappings, addSyncMapping, removeSyncMapping, type SyncConfig, type SyncMapping } from './sync-config';
+import { getSyncConfig, getSyncMappings, addSyncMapping, removeSyncMapping, contentHash, type SyncConfig, type SyncMapping } from './sync-config';
 import { readTextFile, writeTextFile, stat } from '@tauri-apps/plugin-fs';
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'disabled';
@@ -9,6 +9,8 @@ interface SyncManifestEntry {
   localMtime: number;
   remoteMtime: number;
   lastSyncedAt: number;
+  localHash: string;
+  remoteHash: string;
 }
 
 export class SyncManager {
@@ -21,7 +23,10 @@ export class SyncManager {
 
   public onStatusChange?: (status: SyncStatus) => void;
   public onFileStatusChange?: (statuses: Map<string, SyncFileStatus>) => void;
-  public onConflict?: (fileName: string) => Promise<'local' | 'remote' | 'skip'>;
+  /** Called when only the remote changed. Return 'download' to overwrite local, 'ignore' to skip. */
+  public onRemoteChanged?: (fileName: string) => Promise<'download' | 'ignore'>;
+  /** Called when both sides changed. Receives local and remote content. Return merged content or null to skip. */
+  public onConflict?: (fileName: string, localContent: string, remoteContent: string) => Promise<string | null>;
 
   get status(): SyncStatus { return this._status; }
   get fileStatuses(): Map<string, SyncFileStatus> { return this._fileStatuses; }
@@ -36,7 +41,6 @@ export class SyncManager {
     }
     this.client.configure(this.config.serverUrl, this.config.username, this.config.password);
     this.loadManifest();
-    // Initialize file statuses from mappings
     for (const m of getSyncMappings()) {
       this._fileStatuses.set(m.localPath, 'synced');
     }
@@ -56,22 +60,23 @@ export class SyncManager {
     this.init();
   }
 
-  // Mark a local file for sync and upload it immediately
   async markForSync(localPath: string, remotePath: string): Promise<void> {
     if (!this.config?.enabled) return;
     addSyncMapping(localPath, remotePath);
     this.setFileStatus(localPath, 'syncing');
     try {
-      // Ensure remote directory exists
       const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
       if (remoteDir) await this.client.mkdir(remoteDir);
       const content = await readTextFile(localPath);
       await this.client.putFile(remotePath, content);
       const info = await stat(localPath);
+      const hash = contentHash(content);
       this.manifest[localPath] = {
         localMtime: info.mtime?.getTime() ?? Date.now(),
         remoteMtime: Date.now(),
         lastSyncedAt: Date.now(),
+        localHash: hash,
+        remoteHash: hash,
       };
       this.saveManifest();
       this.setFileStatus(localPath, 'synced');
@@ -81,7 +86,6 @@ export class SyncManager {
     }
   }
 
-  // Remove sync mapping
   unmarkSync(localPath: string): void {
     removeSyncMapping(localPath);
     this._fileStatuses.delete(localPath);
@@ -90,21 +94,22 @@ export class SyncManager {
     this.notifyFileStatusChange();
   }
 
-  // Upload a single file after save (only if mapped)
   async uploadFile(localPath: string, content: string): Promise<void> {
     if (!this.config?.enabled) return;
-    const mappings = getSyncMappings();
-    const mapping = mappings.find(m => m.localPath === localPath);
-    if (!mapping) return; // Not mapped, skip
+    const mapping = getSyncMappings().find(m => m.localPath === localPath);
+    if (!mapping) return;
 
     this.setFileStatus(localPath, 'syncing');
     try {
       await this.client.putFile(mapping.remotePath, content);
       const info = await stat(localPath);
+      const hash = contentHash(content);
       this.manifest[localPath] = {
         localMtime: info.mtime?.getTime() ?? Date.now(),
         remoteMtime: Date.now(),
         lastSyncedAt: Date.now(),
+        localHash: hash,
+        remoteHash: hash,
       };
       this.saveManifest();
       this.setFileStatus(localPath, 'synced');
@@ -114,7 +119,6 @@ export class SyncManager {
     }
   }
 
-  // Sync all mapped files
   async sync(): Promise<void> {
     if (!this.config?.enabled) return;
     const mappings = getSyncMappings();
@@ -137,7 +141,6 @@ export class SyncManager {
     this.setStatus(hasError ? 'error' : 'idle');
   }
 
-  // Download a remote file to local path and create mapping
   async downloadAndMap(remotePath: string, localPath: string): Promise<void> {
     if (!this.config?.enabled) return;
     try {
@@ -145,10 +148,13 @@ export class SyncManager {
       await writeTextFile(localPath, content);
       addSyncMapping(localPath, remotePath);
       const info = await stat(localPath);
+      const hash = contentHash(content);
       this.manifest[localPath] = {
         localMtime: info.mtime?.getTime() ?? Date.now(),
         remoteMtime: Date.now(),
         lastSyncedAt: Date.now(),
+        localHash: hash,
+        remoteHash: hash,
       };
       this.saveManifest();
       this.setFileStatus(localPath, 'synced');
@@ -160,74 +166,116 @@ export class SyncManager {
 
   private async syncOneFile(mapping: SyncMapping): Promise<void> {
     this.setFileStatus(mapping.localPath, 'syncing');
-    const manifestEntry = this.manifest[mapping.localPath];
+    const entry = this.manifest[mapping.localPath];
 
+    // Step 1: Check local mtime
     let localMtime: number | null = null;
     let localContent: string | null = null;
+    let localHash: string | null = null;
     try {
       const info = await stat(mapping.localPath);
       localMtime = info.mtime?.getTime() ?? null;
-    } catch {
-      // Local file may not exist
+    } catch { /* local file may not exist */ }
+
+    // Step 2: If local mtime changed, read content and compute hash
+    const localMtimeChanged = localMtime !== null && (!entry || localMtime !== entry.localMtime);
+    if (localMtimeChanged && localMtime !== null) {
+      localContent = await readTextFile(mapping.localPath);
+      localHash = contentHash(localContent);
     }
 
+    // Step 3: Check remote mtime via PROPFIND
     let remoteMtime: number | null = null;
     try {
-      // Check remote file exists by trying to get info
-      const remoteFiles = await this.client.listFiles(
-        mapping.remotePath.substring(0, mapping.remotePath.lastIndexOf('/')) || '/'
+      const parentDir = mapping.remotePath.substring(0, mapping.remotePath.lastIndexOf('/')) || '/';
+      const remoteFiles = await this.client.listFiles(parentDir);
+      const remoteFile = remoteFiles.find(f =>
+        f.path === mapping.remotePath || mapping.remotePath.endsWith('/' + f.name)
       );
-      const remoteFile = remoteFiles.find(f => f.path === mapping.remotePath ||
-        mapping.remotePath.endsWith('/' + f.name));
       if (remoteFile) remoteMtime = remoteFile.mtime;
     } catch { /* remote may not exist */ }
 
-    if (localMtime !== null && remoteMtime === null) {
-      // Local exists, remote doesn't -> upload
-      localContent = await readTextFile(mapping.localPath);
-      await this.client.putFile(mapping.remotePath, localContent);
-      this.manifest[mapping.localPath] = { localMtime, remoteMtime: Date.now(), lastSyncedAt: Date.now() };
-    } else if (localMtime === null && remoteMtime !== null) {
-      // Remote exists, local doesn't -> download
-      const content = await this.client.getFile(mapping.remotePath);
-      await writeTextFile(mapping.localPath, content);
-      const info = await stat(mapping.localPath);
-      this.manifest[mapping.localPath] = { localMtime: info.mtime?.getTime() ?? Date.now(), remoteMtime, lastSyncedAt: Date.now() };
-    } else if (localMtime !== null && remoteMtime !== null && manifestEntry) {
-      const localChanged = localMtime > manifestEntry.lastSyncedAt;
-      const remoteChanged = remoteMtime > manifestEntry.remoteMtime;
-
-      if (localChanged && !remoteChanged) {
-        localContent = await readTextFile(mapping.localPath);
-        await this.client.putFile(mapping.remotePath, localContent);
-        this.manifest[mapping.localPath] = { localMtime, remoteMtime: Date.now(), lastSyncedAt: Date.now() };
-      } else if (!localChanged && remoteChanged) {
-        const content = await this.client.getFile(mapping.remotePath);
-        await writeTextFile(mapping.localPath, content);
-        const info = await stat(mapping.localPath);
-        this.manifest[mapping.localPath] = { localMtime: info.mtime?.getTime() ?? Date.now(), remoteMtime, lastSyncedAt: Date.now() };
-      } else if (localChanged && remoteChanged) {
-        const resolution = await this.onConflict?.(mapping.localPath) ?? 'skip';
-        if (resolution === 'local') {
-          localContent = await readTextFile(mapping.localPath);
-          await this.client.putFile(mapping.remotePath, localContent);
-          this.manifest[mapping.localPath] = { localMtime, remoteMtime: Date.now(), lastSyncedAt: Date.now() };
-        } else if (resolution === 'remote') {
-          const content = await this.client.getFile(mapping.remotePath);
-          await writeTextFile(mapping.localPath, content);
-          const info = await stat(mapping.localPath);
-          this.manifest[mapping.localPath] = { localMtime: info.mtime?.getTime() ?? Date.now(), remoteMtime, lastSyncedAt: Date.now() };
-        }
-      }
-      // Both unchanged -> skip
-    } else if (localMtime !== null && remoteMtime !== null && !manifestEntry) {
-      // First sync, local newer wins
-      localContent = await readTextFile(mapping.localPath);
-      await this.client.putFile(mapping.remotePath, localContent);
-      this.manifest[mapping.localPath] = { localMtime, remoteMtime: Date.now(), lastSyncedAt: Date.now() };
+    // Step 4: If remote mtime changed, download content and compute hash
+    let remoteContent: string | null = null;
+    let remoteHash: string | null = null;
+    const remoteMtimeChanged = remoteMtime !== null && (!entry || remoteMtime !== entry.remoteMtime);
+    if (remoteMtimeChanged) {
+      remoteContent = await this.client.getFile(mapping.remotePath);
+      remoteHash = contentHash(remoteContent);
     }
 
+    // Step 5: Compare hashes to determine action
+    const localReallyChanged = localHash !== null && (!entry || localHash !== entry.localHash);
+    const remoteReallyChanged = remoteHash !== null && (!entry || remoteHash !== entry.remoteHash);
+
+    if (!entry) {
+      // First sync: upload local to remote
+      if (localMtime !== null) {
+        if (!localContent) localContent = await readTextFile(mapping.localPath);
+        if (!localHash) localHash = contentHash(localContent);
+        await this.client.putFile(mapping.remotePath, localContent);
+        this.updateManifest(mapping.localPath, localMtime, Date.now(), localHash, localHash);
+      }
+    } else if (localMtime !== null && remoteMtime === null) {
+      // Remote deleted, re-upload
+      if (!localContent) localContent = await readTextFile(mapping.localPath);
+      if (!localHash) localHash = contentHash(localContent);
+      await this.client.putFile(mapping.remotePath, localContent);
+      this.updateManifest(mapping.localPath, localMtime, Date.now(), localHash, localHash);
+    } else if (localMtime === null && remoteMtime !== null) {
+      // Local deleted, re-download
+      if (!remoteContent) remoteContent = await this.client.getFile(mapping.remotePath);
+      if (!remoteHash) remoteHash = contentHash(remoteContent);
+      await writeTextFile(mapping.localPath, remoteContent);
+      const info = await stat(mapping.localPath);
+      this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), remoteMtime, remoteHash, remoteHash);
+    } else if (localReallyChanged && !remoteReallyChanged) {
+      // Only local changed → upload
+      if (!localContent) localContent = await readTextFile(mapping.localPath);
+      if (!localHash) localHash = contentHash(localContent);
+      await this.client.putFile(mapping.remotePath, localContent);
+      this.updateManifest(mapping.localPath, localMtime!, Date.now(), localHash, localHash);
+    } else if (!localReallyChanged && remoteReallyChanged) {
+      // Only remote changed → prompt user
+      const fileName = mapping.localPath.split('/').pop() || mapping.localPath;
+      const decision = await this.onRemoteChanged?.(fileName) ?? 'ignore';
+      if (decision === 'download') {
+        if (!remoteContent) remoteContent = await this.client.getFile(mapping.remotePath);
+        if (!remoteHash) remoteHash = contentHash(remoteContent);
+        await writeTextFile(mapping.localPath, remoteContent);
+        const info = await stat(mapping.localPath);
+        this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), remoteMtime!, remoteHash, remoteHash);
+      } else {
+        // Ignore: update remote hash in manifest to suppress future prompts
+        this.manifest[mapping.localPath] = {
+          ...entry,
+          remoteMtime: remoteMtime!,
+          remoteHash: remoteHash!,
+        };
+      }
+    } else if (localReallyChanged && remoteReallyChanged) {
+      // Both changed → conflict, show merge UI
+      if (!localContent) localContent = await readTextFile(mapping.localPath);
+      if (!remoteContent) remoteContent = await this.client.getFile(mapping.remotePath);
+      const fileName = mapping.localPath.split('/').pop() || mapping.localPath;
+      const merged = await this.onConflict?.(fileName, localContent, remoteContent);
+      if (merged !== null && merged !== undefined) {
+        // Write merged result to both local and remote
+        await writeTextFile(mapping.localPath, merged);
+        await this.client.putFile(mapping.remotePath, merged);
+        const info = await stat(mapping.localPath);
+        const mergedHash = contentHash(merged);
+        this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), Date.now(), mergedHash, mergedHash);
+      }
+      // null = user cancelled, skip
+    }
+    // else: neither changed → skip
+
     this.setFileStatus(mapping.localPath, 'synced');
+  }
+
+  private updateManifest(localPath: string, localMtime: number, remoteMtime: number, localHash: string, remoteHash: string): void {
+    this.manifest[localPath] = { localMtime, remoteMtime, lastSyncedAt: Date.now(), localHash, remoteHash };
   }
 
   private startPeriodicSync(): void {
