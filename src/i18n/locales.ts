@@ -114,6 +114,13 @@ export interface Locale {
   webdavKeepLocal: string;
   webdavKeepRemote: string;
   webdavKeepBoth: string;
+  remoteFileUpdated: string;
+  mergeConflict: string;
+  useLocalAll: string;
+  useRemoteAll: string;
+  saveMergeResult: string;
+  localVersion: string;
+  remoteVersion: string;
   syncStatusIdle: string;
   syncStatusSyncing: string;
   syncStatusError: string;
@@ -213,6 +220,13 @@ export const en: Locale = {
   webdavKeepLocal: 'Keep Local',
   webdavKeepRemote: 'Keep Remote',
   webdavKeepBoth: 'Keep Both',
+  remoteFileUpdated: '"{file}" has been updated remotely. Download latest version?',
+  mergeConflict: 'Sync Conflict',
+  useLocalAll: 'Use Local',
+  useRemoteAll: 'Use Remote',
+  saveMergeResult: 'Save Merged',
+  localVersion: 'Local Version',
+  remoteVersion: 'Remote Version',
   syncStatusIdle: 'Synced',
   syncStatusSyncing: 'Syncing...',
   syncStatusError: 'Sync error',
@@ -310,6 +324,13 @@ export const zh: Locale = {
   webdavKeepLocal: '保留本地',
   webdavKeepRemote: '保留远程',
   webdavKeepBoth: '保留两者',
+  remoteFileUpdated: '"{file}" 远端已更新，是否下载最新版本？',
+  mergeConflict: '同步冲突',
+  useLocalAll: '使用本地',
+  useRemoteAll: '使用远端',
+  saveMergeResult: '保存合并',
+  localVersion: '本地版本',
+  remoteVersion: '远端版本',
   syncStatusIdle: '已同步',
   syncStatusSyncing: '同步中...',
   syncStatusError: '同步错误',

@@ -197,10 +197,13 @@ async function main() {
   syncManager.onFileStatusChange = (statuses) => {
     fileTree.updateSyncStatuses(statuses);
   };
-  syncManager.onConflict = async (fileName) => {
-    const msg = `${i18n.t.webdavConflict}: ${fileName}\n\n1. ${i18n.t.webdavKeepLocal}\n2. ${i18n.t.webdavKeepRemote}`;
-    const choice = confirm(msg);
-    return choice ? 'local' : 'remote';
+  syncManager.onRemoteChanged = async (fileName) => {
+    return confirm(i18n.t.remoteFileUpdated.replace('{file}', fileName))
+      ? 'download' : 'ignore';
+  };
+  syncManager.onConflict = async (fileName, localContent, remoteContent) => {
+    const { showMergeModal } = await import('./sync/merge-modal');
+    return showMergeModal(fileName, localContent, remoteContent);
   };
   syncManager.init();
   fileTree.syncEnabled = syncManager.isConfigured;
