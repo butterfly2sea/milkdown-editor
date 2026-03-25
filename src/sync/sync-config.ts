@@ -59,3 +59,13 @@ export function isSynced(localPath: string): boolean {
 export function getSyncMapping(localPath: string): SyncMapping | undefined {
   return getSyncMappings().find(m => m.localPath === localPath);
 }
+
+/** Fast string hash for content comparison (not cryptographic) */
+export function contentHash(content: string): string {
+  let h = 0;
+  for (let i = 0; i < content.length; i++) {
+    h = ((h << 5) - h) + content.charCodeAt(i);
+    h |= 0;
+  }
+  return h.toString(36);
+}
