@@ -18,6 +18,8 @@
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-http": "^2.5.7",
     "@tauri-apps/plugin-os": "^2.3.2",
+    "@types/diff": "^7.0.2",
+    "diff": "^8.0.4",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.5",
     "mathlive": "^0.105.0",
