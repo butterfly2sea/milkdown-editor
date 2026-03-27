@@ -56,16 +56,34 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          npm run tauri build -- --target ${{ matrix.target }}
+
+          # Patch desktop file in deb with correct MIME types and %F
+          DEB_PATH=$(find src-tauri/target -name '*.deb' -print -quit)
+          if [ -n "$DEB_PATH" ]; then
+            TMPDIR=$(mktemp -d)
+            dpkg-deb -R "$DEB_PATH" "$TMPDIR"
+            cp src-tauri/desktop-template.desktop "$TMPDIR/usr/share/applications/Milkdown Editor.desktop"
+            # Remove the extra desktop-template.desktop from root if present
+            rm -f "$TMPDIR/desktop-template.desktop"
+            dpkg-deb -b "$TMPDIR" "$DEB_PATH"
+            rm -rf "$TMPDIR"
+          fi
+
+          # Patch desktop file in AppImage
+          APPIMAGE_DIR=$(find src-tauri/target -name '*.AppDir' -type d -print -quit 2>/dev/null)
+          if [ -n "$APPIMAGE_DIR" ] && [ -d "$APPIMAGE_DIR" ]; then
+            find "$APPIMAGE_DIR" -name '*.desktop' -exec cp src-tauri/desktop-template.desktop {} \;
+          fi
+
+      - name: Build Tauri (non-Linux)
+        if: matrix.platform != 'ubuntu-22.04'
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing (configure these secrets for notarized builds):
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v__VERSION__
           releaseName: Milkdown Editor v__VERSION__
@@ -84,3 +102,11 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
+
+      - name: Upload Linux artifacts to release
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
