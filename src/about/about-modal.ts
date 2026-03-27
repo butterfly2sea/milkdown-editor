@@ -41,7 +41,7 @@ export function showAboutModal(): void {
 
   // Version
   const version = document.createElement('p');
-  version.textContent = 'v0.3.0';
+  version.textContent = `v${__APP_VERSION__}`;
   version.style.cssText = `
     margin: 0 0 12px 0;
     font-size: 14px;
