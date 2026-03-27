@@ -37,6 +37,13 @@
         "description": "Markdown Document"
       }
     ],
+    "linux": {
+      "deb": {
+        "files": {
+          "desktop-template.desktop": "/usr/share/applications/Milkdown Editor.desktop"
+        }
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

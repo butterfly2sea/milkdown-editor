@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Office;TextEditor;
+Exec=milkdown-editor %F
+Icon=milkdown-editor
+Name=Milkdown Editor
+Terminal=false
+Type=Application
+StartupWMClass=milkdown-editor
+MimeType=text/markdown;text/x-markdown;text/plain;
