@@ -189,6 +189,11 @@ fn is_markdown_file(path: &str) -> bool {
     path.ends_with(".md") || path.ends_with(".markdown")
 }
 
+fn is_openable_path(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    is_markdown_file(path) || p.is_dir()
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -196,11 +201,12 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            // When another instance is launched with a file path, forward to the existing window
+            // When another instance is launched with a file/folder path, forward to the existing window
             for arg in args.iter().skip(1) {
-                if is_markdown_file(arg) {
+                if is_openable_path(arg) {
                     if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.emit("open-file", arg.to_string());
+                        let event = if std::path::Path::new(arg).is_dir() { "open-folder-path" } else { "open-file" };
+                        let _ = window.emit(event, arg.to_string());
                         let _ = window.set_focus();
                     }
                     break;
@@ -227,10 +233,10 @@ pub fn run() {
                 }
             }
 
-            // Check CLI args for a file to open (file association on Windows/Linux)
+            // Check CLI args for a file or folder to open
             let args: Vec<String> = std::env::args().collect();
             for arg in args.iter().skip(1) {
-                if is_markdown_file(arg) {
+                if is_openable_path(arg) {
                     *app.state::<PendingFile>().0.lock().unwrap() = Some(arg.clone());
                     break;
                 }

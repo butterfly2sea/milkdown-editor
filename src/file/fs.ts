@@ -60,6 +60,16 @@ export class FileManager {
     }
   }
 
+  async openFolderByPath(dirPath: string): Promise<FileTreeNode | null> {
+    try {
+      this._openFolderPath = dirPath;
+      this._openFolderName = this.getBaseName(dirPath);
+      return this.readDirectory(this._openFolderPath, this._openFolderName);
+    } catch {
+      return null;
+    }
+  }
+
   async refreshFolder(): Promise<FileTreeNode | null> {
     if (!this._openFolderPath || !this._openFolderName) return null;
     try {
