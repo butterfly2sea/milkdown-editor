@@ -1,4 +1,8 @@
 use tauri::{Emitter, Manager};
+use std::fs;
+use std::sync::Mutex;
+
+struct PendingFile(Mutex<Option<String>>);
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,6 +145,45 @@ fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn take_pending_file(state: tauri::State<'_, PendingFile>) -> Option<String> {
+    state.0.lock().unwrap().take()
+}
+
+/// Clear WebView cache when app version changes to prevent stale frontend resources.
+fn clear_webview_cache_on_upgrade(app: &tauri::App) {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+
+    let version = app.config().version.clone().unwrap_or_default();
+    let version_file = data_dir.join(".cache_version");
+
+    // Read previously cached version
+    let prev_version = fs::read_to_string(&version_file).unwrap_or_default();
+
+    if prev_version.trim() == version {
+        return; // Same version, no need to clear cache
+    }
+
+    eprintln!("[cache] Version changed: {:?} -> {}, clearing WebView cache", prev_version.trim(), version);
+
+    // Remove WebView cache directories
+    for dir_name in &["WebKitCache", "CacheStorage"] {
+        let cache_dir = data_dir.join(dir_name);
+        if cache_dir.exists() {
+            if let Err(e) = fs::remove_dir_all(&cache_dir) {
+                eprintln!("[cache] Failed to remove {}: {}", dir_name, e);
+            }
+        }
+    }
+
+    // Save current version
+    let _ = fs::create_dir_all(&data_dir);
+    let _ = fs::write(&version_file, &version);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 fn is_markdown_file(path: &str) -> bool {
     path.ends_with(".md") || path.ends_with(".markdown")
@@ -164,10 +207,16 @@ pub fn run() {
                 }
             }
         }))
-        .invoke_handler(tauri::generate_handler![update_menu, open_url])
+        .invoke_handler(tauri::generate_handler![update_menu, open_url, take_pending_file])
         .setup(|app| {
+            // Clear stale WebView cache after version upgrade
+            clear_webview_cache_on_upgrade(app);
+
             let menu = build_menu(&app.handle());
             app.set_menu(menu)?;
+
+            // Initialize pending file state
+            app.manage(PendingFile(Mutex::new(None)));
 
             #[cfg(target_os = "macos")]
             {
@@ -178,19 +227,11 @@ pub fn run() {
                 }
             }
 
-            // Check CLI args for a file to open (file association / right-click open)
+            // Check CLI args for a file to open (file association on Windows/Linux)
             let args: Vec<String> = std::env::args().collect();
             for arg in args.iter().skip(1) {
                 if is_markdown_file(arg) {
-                    let path = arg.clone();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let window_clone = window.clone();
-                        // Emit after frontend is ready
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(800));
-                            let _ = window_clone.emit("open-file", path);
-                        });
-                    }
+                    *app.state::<PendingFile>().0.lock().unwrap() = Some(arg.clone());
                     break;
                 }
             }
@@ -204,6 +245,27 @@ pub fn run() {
                 let _ = window.emit(&event_name, ());
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Handle macOS file open events (double-click / Open With)
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = &_event {
+                for url in urls {
+                    let path = url.to_file_path()
+                        .map(|p: std::path::PathBuf| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| url.to_string());
+                    if is_markdown_file(&path) {
+                        if let Some(window) = _app.get_webview_window("main") {
+                            let _ = window.emit("open-file", path.clone());
+                            let _ = window.set_focus();
+                        }
+                        if let Some(state) = _app.try_state::<PendingFile>() {
+                            *state.0.lock().unwrap() = Some(path);
+                        }
+                        break;
+                    }
+                }
+            }
+        });
 }

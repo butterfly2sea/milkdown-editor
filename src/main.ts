@@ -37,12 +37,21 @@ async function main() {
     throw new Error('Required DOM elements not found');
   }
 
-  // Platform detection
+  // Platform detection & disable native context menu in Tauri (desktop app)
   if ('__TAURI_INTERNALS__' in window) {
     import('@tauri-apps/plugin-os').then(({ platform }) => {
       const os = platform();
       document.body.classList.add(`platform-${os}`);
     }).catch(() => {});
+
+    // Prevent WebView native context menu (Reload, Inspect, etc.)
+    // Custom context menus use stopPropagation + their own preventDefault
+    document.addEventListener('contextmenu', (e) => {
+      // Allow custom context menus on file tree items (they handle their own preventDefault)
+      if (!(e.target as HTMLElement).closest('.ctx-menu')) {
+        e.preventDefault();
+      }
+    });
   }
 
   // Initialize UI components
@@ -187,6 +196,19 @@ async function main() {
   // File tree click handler
   fileTree.onFileSelect = (path) => {
     openFile(path);
+  };
+
+  // File tree refresh handler
+  fileTree.onRefresh = async () => {
+    if (fileManager.hasFolderOpen) {
+      const tree = await fileManager.refreshFolder();
+      if (tree) {
+        fileTree.render(tree);
+        if (fileManager.currentPath) {
+          fileTree.setActiveFile(fileManager.currentPath);
+        }
+      }
+    }
   };
 
   // -- WebDAV Sync --
@@ -496,6 +518,51 @@ async function main() {
       listen<string>('open-file', (event) => {
         console.log('[open-file] received:', event.payload);
         openFile(event.payload);
+      });
+
+      // Check for pending file from OS launch (file association / double-click)
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke<string | null>('take_pending_file').then((path) => {
+          if (path) {
+            console.log('[pending-file] opening:', path);
+            openFile(path);
+          }
+        });
+      });
+
+      // Drag-and-drop file support
+      import('@tauri-apps/api/webview').then(({ getCurrentWebview }) => {
+        const dropOverlay = document.createElement('div');
+        dropOverlay.id = 'drop-overlay';
+        const dropLabel = document.createElement('div');
+        dropLabel.className = 'drop-overlay-content';
+        dropLabel.textContent = i18n.t.dropToOpen;
+        dropOverlay.appendChild(dropLabel);
+        document.body.appendChild(dropOverlay);
+
+        i18n.onChange(() => {
+          dropLabel.textContent = i18n.t.dropToOpen;
+        });
+
+        let lastDropTime = 0;
+        getCurrentWebview().onDragDropEvent((event) => {
+          if (event.payload.type === 'enter' || event.payload.type === 'over') {
+            dropOverlay.classList.add('visible');
+          } else if (event.payload.type === 'drop') {
+            dropOverlay.classList.remove('visible');
+            const now = Date.now();
+            if (now - lastDropTime < 500) return;
+            lastDropTime = now;
+            const mdFile = event.payload.paths.find(
+              (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
+            );
+            if (mdFile) {
+              openFile(mdFile);
+            }
+          } else if (event.payload.type === 'leave') {
+            dropOverlay.classList.remove('visible');
+          }
+        });
       });
     });
   }

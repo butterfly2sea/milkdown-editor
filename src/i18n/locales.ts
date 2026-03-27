@@ -90,6 +90,8 @@ export interface Locale {
   tabFiles: string;
   tabOutline: string;
   tabRemote: string;
+  refreshFileTree: string;
+  dropToOpen: string;
   downloadToLocal: string;
   syncToWebdav: string;
   unsyncFromWebdav: string;
@@ -198,6 +200,8 @@ export const en: Locale = {
   tabFiles: 'Files',
   tabOutline: 'Outline',
   tabRemote: 'Remote',
+  refreshFileTree: 'Refresh',
+  dropToOpen: 'Drop markdown file to open',
   downloadToLocal: 'Download to local',
   syncToWebdav: 'Sync to WebDAV',
   unsyncFromWebdav: 'Unsync',
@@ -302,6 +306,8 @@ export const zh: Locale = {
   tabFiles: '文件',
   tabOutline: '大纲',
   tabRemote: '远程',
+  refreshFileTree: '刷新',
+  dropToOpen: '拖放 Markdown 文件以打开',
   downloadToLocal: '下载到本地',
   syncToWebdav: '同步到 WebDAV',
   unsyncFromWebdav: '取消同步',

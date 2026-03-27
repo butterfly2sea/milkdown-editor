@@ -164,3 +164,30 @@ body.platform-macos {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* Drag-and-drop overlay */
+#drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 102, 214, 0.08);
+  border: 3px dashed var(--accent, #0366d6);
+  z-index: 9999;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+#drop-overlay.visible {
+  display: flex;
+}
+
+.drop-overlay-content {
+  padding: 16px 32px;
+  background: var(--bg-elevated, #fff);
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--accent, #0366d6);
+  box-shadow: var(--shadow-md);
+  font-weight: 500;
+}
