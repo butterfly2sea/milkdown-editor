@@ -11,6 +11,7 @@ export class FileTree {
   public onFileSelect?: (path: string) => void;
   public onSyncFile?: (path: string) => void;
   public onUnsyncFile?: (path: string) => void;
+  public onRefresh?: () => void;
   public syncEnabled = false;
 
   constructor(container: HTMLElement) {
@@ -21,6 +22,14 @@ export class FileTree {
       padding: 8px 0;
     `;
     container.appendChild(this.el);
+
+    // Right-click on blank area shows refresh menu
+    this.el.addEventListener('contextmenu', (e) => {
+      // Only trigger on blank area (not on file/folder items)
+      if ((e.target as HTMLElement).closest('.file-tree-item')) return;
+      e.preventDefault();
+      this.showBlankContextMenu(e);
+    });
   }
 
   updateSyncStatuses(statuses: Map<string, SyncFileStatus>): void {
@@ -330,6 +339,55 @@ export class FileTree {
       btn.addEventListener('click', () => { menu.remove(); item.action(); });
       menu.appendChild(btn);
     }
+
+    document.body.appendChild(menu);
+    const close = (ev: MouseEvent) => {
+      if (!menu.contains(ev.target as Node)) {
+        menu.remove();
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+
+  private showBlankContextMenu(e: MouseEvent): void {
+    document.querySelector('.ctx-menu')?.remove();
+
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.style.cssText = `
+      position: fixed;
+      left: ${e.clientX}px;
+      top: ${e.clientY}px;
+      background: var(--bg-elevated, #fff);
+      border: 1px solid var(--border-color, #e8e8e8);
+      border-radius: 6px;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      z-index: 200;
+      min-width: 120px;
+    `;
+
+    const btn = document.createElement('button');
+    btn.textContent = i18n.t.refreshFileTree;
+    btn.style.cssText = `
+      display: block;
+      width: 100%;
+      padding: 6px 12px;
+      border: none;
+      background: transparent;
+      color: var(--text-primary, #333);
+      cursor: pointer;
+      font-size: 12px;
+      text-align: left;
+    `;
+    btn.addEventListener('mouseenter', () => { btn.style.background = 'var(--sidebar-hover, #e8e8e8)'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = 'transparent'; });
+    btn.addEventListener('click', () => {
+      menu.remove();
+      this.onRefresh?.();
+    });
+    menu.appendChild(btn);
 
     document.body.appendChild(menu);
     const close = (ev: MouseEvent) => {
