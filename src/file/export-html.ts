@@ -1,4 +1,5 @@
 import { marked, type Tokens } from 'marked';
+import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import plantumlEncoder from 'plantuml-encoder';
 import { getPlantUMLServer } from '../editor/plugins/plantuml-plugin';
@@ -29,7 +30,7 @@ export async function exportHTML(
   title: string,
 ): Promise<void> {
   // Convert markdown to HTML (math formulas $..$ and $$...$$ are preserved as-is by marked)
-  const htmlContent = marked(markdown) as string;
+  const htmlContent = markdownToHTML(markdown);
 
   const hljsCSS = getHighlightCSS(theme);
   const html = buildHTMLDocument(htmlContent, title, theme, hljsCSS);
@@ -55,7 +56,14 @@ export async function exportHTML(
 }
 
 export function markdownToHTML(markdown: string): string {
-  return marked(markdown) as string;
+  return sanitizeHTML(marked(markdown) as string);
+}
+
+function sanitizeHTML(html: string): string {
+  return DOMPurify.sanitize(html, {
+    FORBID_TAGS: ['script', 'style'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick'],
+  });
 }
 
 export function getHighlightCSS(theme: 'light' | 'dark'): string {
