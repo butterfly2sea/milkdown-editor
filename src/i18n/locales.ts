@@ -12,6 +12,7 @@ export interface Locale {
   exportHTML: string;
   exportPDF: string;
   sourceMode: string;
+  viewModeUndoWarning: string;
 
   // File operations
   unsavedWarning: string;
@@ -153,6 +154,7 @@ export const en: Locale = {
   exportHTML: 'Export HTML',
   exportPDF: 'Export PDF',
   sourceMode: 'Source code / WYSIWYG',
+  viewModeUndoWarning: 'Switching modes will clear undo history. Continue?',
   unsavedWarning: 'You have unsaved changes. Discard them?',
   fileName: 'File name:',
   newFile: 'New File',
@@ -268,6 +270,7 @@ export const zh: Locale = {
   exportHTML: '导出 HTML',
   exportPDF: '导出 PDF',
   sourceMode: '源码 / 所见即所得',
+  viewModeUndoWarning: '切换模式将清空撤销历史，是否继续？',
   unsavedWarning: '有未保存的更改，是否丢弃？',
   fileName: '文件名：',
   newFile: '新建文件',

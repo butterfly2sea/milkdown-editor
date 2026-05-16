@@ -22,7 +22,7 @@ export class StatusBar {
 
   public onThemeToggle?: () => void;
   public onExport?: (format: 'html' | 'pdf') => void;
-  public onViewModeToggle?: (mode: ViewMode) => void;
+  public onViewModeToggle?: (mode: ViewMode) => boolean;
   public onSyncClick?: () => void;
 
   constructor(container: HTMLElement) {
@@ -59,9 +59,10 @@ export class StatusBar {
       if (this._viewMode !== 'source') this.modeBtn.style.background = 'transparent';
     });
     this.modeBtn.addEventListener('click', () => {
-      this._viewMode = this._viewMode === 'wysiwyg' ? 'source' : 'wysiwyg';
+      const nextMode = this._viewMode === 'wysiwyg' ? 'source' : 'wysiwyg';
+      if (this.onViewModeToggle?.(nextMode) === false) return;
+      this._viewMode = nextMode;
       this.updateModeButton();
-      this.onViewModeToggle?.(this._viewMode);
     });
 
     this.wordCountEl = document.createElement('span');

@@ -413,6 +413,8 @@ export class AppCoordinator {
   root.parentElement?.appendChild(sourceTextarea);
 
   statusBar.onViewModeToggle = (mode) => {
+    if (!confirm(i18n.t.viewModeUndoWarning)) return false;
+
     const editorDiv = root.querySelector('.milkdown') as HTMLElement || root.firstElementChild as HTMLElement;
     if (mode === 'source') {
       // Switch to source mode
@@ -428,6 +430,7 @@ export class AppCoordinator {
       if (editorDiv) editorDiv.style.display = '';
       editor.setMarkdown(md);
     }
+    return true;
   };
 
   // Sync source textarea changes for word count
