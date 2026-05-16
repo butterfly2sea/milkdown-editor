@@ -4,6 +4,26 @@ use std::sync::Mutex;
 
 struct PendingFile(Mutex<Option<String>>);
 
+const MENU_NEW: &str = "menu-new";
+const MENU_OPEN: &str = "menu-open";
+const MENU_OPEN_FOLDER: &str = "menu-open-folder";
+const MENU_SAVE: &str = "menu-save";
+const MENU_SAVE_AS: &str = "menu-save-as";
+const MENU_EXPORT_HTML: &str = "menu-export-html";
+const MENU_UNDO: &str = "menu-undo";
+const MENU_REDO: &str = "menu-redo";
+const MENU_FIND: &str = "menu-find";
+const MENU_FIND_REPLACE: &str = "menu-find-replace";
+const MENU_SYNC_FILE: &str = "menu-sync-file";
+const MENU_MARK_SYNC: &str = "menu-mark-sync";
+const MENU_TOGGLE_SIDEBAR: &str = "menu-toggle-sidebar";
+const MENU_TOGGLE_THEME: &str = "menu-toggle-theme";
+const MENU_TOGGLE_FULLSCREEN: &str = "menu-toggle-fullscreen";
+const MENU_LANG_EN: &str = "menu-lang-en";
+const MENU_LANG_ZH: &str = "menu-lang-zh";
+const MENU_SETTINGS: &str = "menu-settings";
+const MENU_ABOUT: &str = "menu-about";
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MenuLabels {
@@ -194,6 +214,31 @@ fn is_openable_path(path: &str) -> bool {
     is_markdown_file(path) || p.is_dir()
 }
 
+fn menu_event_name(id: &str) -> Option<&'static str> {
+    match id {
+        "new" => Some(MENU_NEW),
+        "open" => Some(MENU_OPEN),
+        "open-folder" => Some(MENU_OPEN_FOLDER),
+        "save" => Some(MENU_SAVE),
+        "save-as" => Some(MENU_SAVE_AS),
+        "export-html" => Some(MENU_EXPORT_HTML),
+        "undo" => Some(MENU_UNDO),
+        "redo" => Some(MENU_REDO),
+        "find" => Some(MENU_FIND),
+        "find-replace" => Some(MENU_FIND_REPLACE),
+        "sync-file" => Some(MENU_SYNC_FILE),
+        "mark-sync" => Some(MENU_MARK_SYNC),
+        "toggle-sidebar" => Some(MENU_TOGGLE_SIDEBAR),
+        "toggle-theme" => Some(MENU_TOGGLE_THEME),
+        "toggle-fullscreen" => Some(MENU_TOGGLE_FULLSCREEN),
+        "lang-en" => Some(MENU_LANG_EN),
+        "lang-zh" => Some(MENU_LANG_ZH),
+        "settings" => Some(MENU_SETTINGS),
+        "about" => Some(MENU_ABOUT),
+        _ => None,
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -218,7 +263,7 @@ pub fn run() {
             // Clear stale WebView cache after version upgrade
             clear_webview_cache_on_upgrade(app);
 
-            let menu = build_menu(&app.handle());
+            let menu = build_menu(app.handle());
             app.set_menu(menu)?;
 
             // Initialize pending file state
@@ -247,8 +292,9 @@ pub fn run() {
         .on_menu_event(|app, event| {
             let id: &str = event.id().as_ref();
             if let Some(window) = app.get_webview_window("main") {
-                let event_name = format!("menu-{}", id);
-                let _ = window.emit(&event_name, ());
+                if let Some(event_name) = menu_event_name(id) {
+                    let _ = window.emit(event_name, ());
+                }
             }
         })
         .build(tauri::generate_context!())
