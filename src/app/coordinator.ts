@@ -102,6 +102,12 @@ export class AppCoordinator {
   let editorReady = false;
   let onContentChange: (() => void) | null = null;
   let editorInstance: Awaited<ReturnType<typeof createEditor>> | null = null;
+  const markEditorReady = () => {
+    requestAnimationFrame(() => {
+      editorReady = true;
+      onContentChange?.();
+    });
+  };
   const editor = await createEditor(root, defaultContent, (markdown) => {
     // Skip change tracking during initial editor creation
     if (!editorReady) return;
@@ -128,7 +134,7 @@ export class AppCoordinator {
   // Expose for testing/debugging
   (window as any).__editor = editor;
   // Mark editor as ready after initial setup to avoid false "unsaved" state
-  requestAnimationFrame(() => { editorReady = true; });
+  markEditorReady();
 
   // Update cursor position on click/key navigation
   const updateCursorPos = () => {
@@ -172,7 +178,7 @@ export class AppCoordinator {
       titleBar.setFileName(fileManager.currentFileName);
       titleBar.setUnsaved(false);
       statusBar.updateWordCount(content);
-      requestAnimationFrame(() => { editorReady = true; });
+      markEditorReady();
     }
   };
 
@@ -216,7 +222,7 @@ export class AppCoordinator {
     fileManager.setBaseContent(newContent);
     titleBar.setFileName(i18n.t.untitled);
     titleBar.setUnsaved(false);
-    requestAnimationFrame(() => { editorReady = true; });
+    markEditorReady();
   };
 
   const openFolder = async () => {
