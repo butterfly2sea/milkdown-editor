@@ -3,6 +3,7 @@ type CleanupFn = () => void;
 export class EventManager {
   private ac = new AbortController();
   private cleanups = new Set<CleanupFn>();
+  private cleanupGeneration = 0;
 
   on<K extends keyof DocumentEventMap>(
     target: Document,
@@ -38,7 +39,21 @@ export class EventManager {
     this.cleanups.add(cleanup);
   }
 
+  addAsyncCleanup(cleanupPromise: Promise<CleanupFn>): void {
+    const generation = this.cleanupGeneration;
+    cleanupPromise.then((cleanup) => {
+      if (generation !== this.cleanupGeneration) {
+        cleanup();
+        return;
+      }
+      this.addCleanup(cleanup);
+    }).catch((err) => {
+      console.error('[event-manager] async cleanup setup failed:', err);
+    });
+  }
+
   cleanup(): void {
+    this.cleanupGeneration += 1;
     this.ac.abort();
     this.ac = new AbortController();
 

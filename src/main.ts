@@ -533,7 +533,7 @@ async function main() {
 
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
-    import('@tauri-apps/api/event').then(({ listen }) => {
+    eventManager.addAsyncCleanup(import('@tauri-apps/api/event').then(async ({ listen }) => {
       const menuHandlers: Record<string, () => void> = {
         'menu-new': () => newFile(),
         'menu-open': () => openFile(),
@@ -577,97 +577,105 @@ async function main() {
         'menu-about': () => showAboutModal(),
       };
 
-      for (const [event, handler] of Object.entries(menuHandlers)) {
+      const unlistenPromises = Object.entries(menuHandlers).map(([event, handler]) =>
         listen(event, () => {
           console.log('[menu] received:', event);
           handler();
-        });
-      }
+        }),
+      );
 
       // Listen for file open from OS file association / single-instance
-      listen<string>('open-file', (event) => {
+      unlistenPromises.push(listen<string>('open-file', (event) => {
         console.log('[open-file] received:', event.payload);
         openFile(event.payload);
-      });
+      }));
 
       // Listen for folder open from OS right-click / single-instance
-      listen<string>('open-folder-path', (event) => {
+      unlistenPromises.push(listen<string>('open-folder-path', (event) => {
         console.log('[open-folder-path] received:', event.payload);
         openFolderByPath(event.payload);
-      });
+      }));
 
-      // Check for pending file/folder from OS launch (file association / double-click)
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke<string | null>('take_pending_file').then(async (path) => {
-          if (!path) return;
-          console.log('[pending-path] opening:', path);
-          // Use fs plugin to check if path is a directory
-          try {
-            const { stat } = await import('@tauri-apps/plugin-fs');
-            const info = await stat(path);
-            if (info.isDirectory) {
-              openFolderByPath(path);
-            } else {
-              openFile(path);
-            }
-          } catch {
-            // Fallback: try as file
+      const unlistens = await Promise.all(unlistenPromises);
+      return () => {
+        for (const unlisten of unlistens) {
+          unlisten();
+        }
+      };
+    }));
+
+    // Check for pending file/folder from OS launch (file association / double-click)
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<string | null>('take_pending_file').then(async (path) => {
+        if (!path) return;
+        console.log('[pending-path] opening:', path);
+        // Use fs plugin to check if path is a directory
+        try {
+          const { stat } = await import('@tauri-apps/plugin-fs');
+          const info = await stat(path);
+          if (info.isDirectory) {
+            openFolderByPath(path);
+          } else {
             openFile(path);
           }
-        });
-      });
-
-      // Drag-and-drop file support
-      import('@tauri-apps/api/webview').then(({ getCurrentWebview }) => {
-        const dropOverlay = document.createElement('div');
-        dropOverlay.id = 'drop-overlay';
-        const dropLabel = document.createElement('div');
-        dropLabel.className = 'drop-overlay-content';
-        dropLabel.textContent = i18n.t.dropToOpen;
-        dropOverlay.appendChild(dropLabel);
-        document.body.appendChild(dropOverlay);
-
-        i18n.onChange(() => {
-          dropLabel.textContent = i18n.t.dropToOpen;
-        });
-
-        let lastDropTime = 0;
-        getCurrentWebview().onDragDropEvent(async (event) => {
-          if (event.payload.type === 'enter' || event.payload.type === 'over') {
-            dropOverlay.classList.add('visible');
-          } else if (event.payload.type === 'drop') {
-            dropOverlay.classList.remove('visible');
-            const now = Date.now();
-            if (now - lastDropTime < 500) return;
-            lastDropTime = now;
-            const paths = event.payload.paths;
-            // Check first path: if it's a directory, open as folder tree
-            if (paths.length > 0) {
-              try {
-                const { stat } = await import('@tauri-apps/plugin-fs');
-                const info = await stat(paths[0]);
-                if (info.isDirectory) {
-                  openFolderByPath(paths[0]);
-                  return;
-                }
-              } catch (err) {
-                console.warn('[drag-drop] failed to inspect dropped path:', paths[0], err);
-                statusBar.showMessage(i18n.t.dropFileCheckFailed, 'warn');
-                return;
-              }
-              const mdFile = paths.find(
-                (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
-              );
-              if (mdFile) {
-                openFile(mdFile);
-              }
-            }
-          } else if (event.payload.type === 'leave') {
-            dropOverlay.classList.remove('visible');
-          }
-        });
+        } catch {
+          // Fallback: try as file
+          openFile(path);
+        }
       });
     });
+
+    // Drag-and-drop file support
+    eventManager.addAsyncCleanup(import('@tauri-apps/api/webview').then(async ({ getCurrentWebview }) => {
+      const dropOverlay = document.createElement('div');
+      dropOverlay.id = 'drop-overlay';
+      const dropLabel = document.createElement('div');
+      dropLabel.className = 'drop-overlay-content';
+      dropLabel.textContent = i18n.t.dropToOpen;
+      dropOverlay.appendChild(dropLabel);
+      document.body.appendChild(dropOverlay);
+
+      const unsubscribeI18n = i18n.onChange(() => {
+        dropLabel.textContent = i18n.t.dropToOpen;
+      });
+
+      let lastDropTime = 0;
+      const unlistenDragDrop = await getCurrentWebview().onDragDropEvent(async (event) => {
+        if (event.payload.type === 'enter' || event.payload.type === 'over') {
+          dropOverlay.classList.add('visible');
+        } else if (event.payload.type === 'drop') {
+          dropOverlay.classList.remove('visible');
+          const now = Date.now();
+          if (now - lastDropTime < 500) return;
+          lastDropTime = now;
+          const paths = event.payload.paths;
+          // Check first path: if it's a directory, open as folder tree
+          if (paths.length > 0) {
+            try {
+              const { stat } = await import('@tauri-apps/plugin-fs');
+              const info = await stat(paths[0]);
+              if (info.isDirectory) {
+                openFolderByPath(paths[0]);
+                return;
+              }
+            } catch { /* not a directory, try as file */ }
+            const mdFile = paths.find(
+              (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
+            );
+            if (mdFile) {
+              openFile(mdFile);
+            }
+          }
+        } else if (event.payload.type === 'leave') {
+          dropOverlay.classList.remove('visible');
+        }
+      });
+      return () => {
+        unlistenDragDrop();
+        unsubscribeI18n();
+        dropOverlay.remove();
+      };
+    }));
   }
 }
 
