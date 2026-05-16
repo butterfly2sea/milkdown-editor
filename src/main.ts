@@ -19,6 +19,7 @@ import { i18n } from './i18n';
 import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange } from './settings/settings-modal';
 import { SyncManager } from './sync/sync-manager';
 import { showAboutModal } from './about/about-modal';
+import { MenuEvents, type MenuEvent } from './types/menu-events';
 import { EventManager } from './utils/event-manager';
 
 const defaultContent = '';
@@ -534,26 +535,26 @@ async function main() {
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
     eventManager.addAsyncCleanup(import('@tauri-apps/api/event').then(async ({ listen }) => {
-      const menuHandlers: Record<string, () => void> = {
-        'menu-new': () => newFile(),
-        'menu-open': () => openFile(),
-        'menu-open-folder': () => openFolder(),
-        'menu-save': () => saveFile(),
-        'menu-save-as': () => saveAs(),
-        'menu-export-html': () => {
+      const menuHandlers: Record<MenuEvent, () => void> = {
+        [MenuEvents.NEW]: () => newFile(),
+        [MenuEvents.OPEN]: () => openFile(),
+        [MenuEvents.OPEN_FOLDER]: () => openFolder(),
+        [MenuEvents.SAVE]: () => saveFile(),
+        [MenuEvents.SAVE_AS]: () => saveAs(),
+        [MenuEvents.EXPORT_HTML]: () => {
           const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
           exportHTML(getContent(), theme, fileManager.currentFileName).catch(console.error);
         },
-        'menu-undo': () => editorUndo(editor.crepe),
-        'menu-redo': () => editorRedo(editor.crepe),
-        'menu-find': () => searchBar.show(false),
-        'menu-find-replace': () => searchBar.show(true),
-        'menu-sync-file': () => {
+        [MenuEvents.UNDO]: () => editorUndo(editor.crepe),
+        [MenuEvents.REDO]: () => editorRedo(editor.crepe),
+        [MenuEvents.FIND]: () => searchBar.show(false),
+        [MenuEvents.FIND_REPLACE]: () => searchBar.show(true),
+        [MenuEvents.SYNC_FILE]: () => {
           if (fileManager.currentPath) {
             syncManager.sync().catch(console.error);
           }
         },
-        'menu-mark-sync': () => {
+        [MenuEvents.MARK_SYNC]: () => {
           if (fileManager.currentPath) {
             const isSynced = syncManager.fileStatuses.has(fileManager.currentPath);
             if (isSynced) {
@@ -563,18 +564,18 @@ async function main() {
             }
           }
         },
-        'menu-toggle-sidebar': () => toggleSidebar(),
-        'menu-toggle-theme': () => toggleTheme(),
-        'menu-toggle-fullscreen': async () => {
+        [MenuEvents.TOGGLE_SIDEBAR]: () => toggleSidebar(),
+        [MenuEvents.TOGGLE_THEME]: () => toggleTheme(),
+        [MenuEvents.TOGGLE_FULLSCREEN]: async () => {
           const { getCurrentWindow } = await import('@tauri-apps/api/window');
           const win = getCurrentWindow();
           const isFullscreen = await win.isFullscreen();
           await win.setFullscreen(!isFullscreen);
         },
-        'menu-lang-en': () => i18n.setLang('en'),
-        'menu-lang-zh': () => i18n.setLang('zh'),
-        'menu-settings': () => showSettingsModal(),
-        'menu-about': () => showAboutModal(),
+        [MenuEvents.LANG_EN]: () => i18n.setLang('en'),
+        [MenuEvents.LANG_ZH]: () => i18n.setLang('zh'),
+        [MenuEvents.SETTINGS]: () => showSettingsModal(),
+        [MenuEvents.ABOUT]: () => showAboutModal(),
       };
 
       const unlistenPromises = Object.entries(menuHandlers).map(([event, handler]) =>
