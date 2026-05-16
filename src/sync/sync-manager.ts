@@ -20,6 +20,7 @@ export class SyncManager {
   private manifest: Record<string, SyncManifestEntry> = {};
   private _status: SyncStatus = 'disabled';
   private _fileStatuses = new Map<string, SyncFileStatus>();
+  private uploadLocks = new Map<string, Promise<void>>();
 
   public onStatusChange?: (status: SyncStatus) => void;
   public onFileStatusChange?: (statuses: Map<string, SyncFileStatus>) => void;
@@ -95,6 +96,23 @@ export class SyncManager {
   }
 
   async uploadFile(localPath: string, content: string): Promise<void> {
+    const previousUpload = this.uploadLocks.get(localPath);
+    const uploadTask = (async () => {
+      if (previousUpload) await previousUpload.catch(() => undefined);
+      await this.doUploadFile(localPath, content);
+    })();
+
+    this.uploadLocks.set(localPath, uploadTask);
+    try {
+      await uploadTask;
+    } finally {
+      if (this.uploadLocks.get(localPath) === uploadTask) {
+        this.uploadLocks.delete(localPath);
+      }
+    }
+  }
+
+  private async doUploadFile(localPath: string, content: string): Promise<void> {
     if (!this.config?.enabled) return;
     const mapping = getSyncMappings().find(m => m.localPath === localPath);
     if (!mapping) return;
