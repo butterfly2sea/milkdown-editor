@@ -8,7 +8,12 @@ const DEFAULT_SERVER = 'https://www.plantuml.com/plantuml';
 
 export function initPlantUMLServerFromStorage(): void {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) setPlantUMLServer(saved);
+  if (!saved) return;
+  if (isHttpsUrl(saved)) {
+    setPlantUMLServer(saved);
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
 }
 
 let _onSyncConfigChange: (() => void) | null = null;
@@ -82,6 +87,9 @@ export function showSettingsModal(): void {
   `;
   input.addEventListener('focus', () => {
     input.style.borderColor = 'var(--accent, #0366d6)';
+  });
+  input.addEventListener('input', () => {
+    input.setCustomValidity('');
   });
   input.addEventListener('blur', () => {
     input.style.borderColor = 'var(--border-color, #e8e8e8)';
@@ -232,6 +240,12 @@ export function showSettingsModal(): void {
     // Save PlantUML settings
     const url = input.value.trim().replace(/\/+$/, '');
     if (url) {
+      if (!isHttpsUrl(url)) {
+        input.style.borderColor = '#e53e3e';
+        input.setCustomValidity(i18n.t.plantumlServerUrlInvalid);
+        input.reportValidity();
+        return;
+      }
       setPlantUMLServer(url);
       localStorage.setItem(STORAGE_KEY, url);
     } else {
@@ -276,4 +290,12 @@ export function showSettingsModal(): void {
 
   document.body.appendChild(overlay);
   input.focus();
+}
+
+function isHttpsUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }

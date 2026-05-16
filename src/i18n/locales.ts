@@ -57,6 +57,7 @@ export interface Locale {
   settings: string;
   plantumlServerUrl: string;
   plantumlServerUrlPlaceholder: string;
+  plantumlServerUrlInvalid: string;
   save: string;
   cancel: string;
   resetDefault: string;
@@ -182,6 +183,7 @@ export const en: Locale = {
   settings: 'Settings',
   plantumlServerUrl: 'PlantUML Server URL',
   plantumlServerUrlPlaceholder: 'https://www.plantuml.com/plantuml',
+  plantumlServerUrlInvalid: 'PlantUML server URL must be a valid HTTPS URL.',
   save: 'Save',
   cancel: 'Cancel',
   resetDefault: 'Reset to default',
@@ -293,6 +295,7 @@ export const zh: Locale = {
   settings: '设置',
   plantumlServerUrl: 'PlantUML 服务器地址',
   plantumlServerUrlPlaceholder: 'https://www.plantuml.com/plantuml',
+  plantumlServerUrlInvalid: 'PlantUML 服务器地址必须是有效的 HTTPS 地址。',
   save: '保存',
   cancel: '取消',
   resetDefault: '恢复默认',
