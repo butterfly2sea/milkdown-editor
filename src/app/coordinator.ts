@@ -5,7 +5,6 @@ import { TableOfContents } from '../sidebar/toc';
 import { RemoteFileTree } from '../sidebar/remote-tree';
 import { TitleBar } from '../titlebar/titlebar';
 import { StatusBar } from '../statusbar/statusbar';
-import { registerKeymap } from '../editor/keymap';
 import { FileManager } from '../file/fs';
 import { FileTree } from '../sidebar/file-tree';
 import { exportHTML } from '../file/export-html';
@@ -16,6 +15,7 @@ import { SyncManager } from '../sync/sync-manager';
 import { showAboutModal } from '../about/about-modal';
 import { MenuEvents, type MenuEvent } from '../types/menu-events';
 import { EventManager } from '../utils/event-manager';
+import { ShortcutManager } from './shortcut-manager';
 
 const defaultContent = '';
 
@@ -450,7 +450,7 @@ export class AppCoordinator {
 
   // -- Keyboard shortcuts --
 
-  eventManager.addCleanup(registerKeymap({
+  const shortcutManager = new ShortcutManager({
     save: saveFile,
     saveAs,
     open: () => openFile(),
@@ -465,7 +465,9 @@ export class AppCoordinator {
     },
     find: () => searchBar.show(false),
     findReplace: () => searchBar.show(true),
-  }));
+  });
+  shortcutManager.init();
+  eventManager.addCleanup(() => shortcutManager.dispose());
 
   // Warn before leaving with unsaved changes
   eventManager.on(window, 'beforeunload', (e) => {
