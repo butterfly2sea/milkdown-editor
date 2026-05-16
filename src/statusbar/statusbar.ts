@@ -18,6 +18,7 @@ export class StatusBar {
   private _lastCharCount = 0;
   private _lastLine = 1;
   private _lastCol = 1;
+  private messageTimer: ReturnType<typeof setTimeout> | null = null;
 
   public onThemeToggle?: () => void;
   public onExport?: (format: 'html' | 'pdf') => void;
@@ -148,6 +149,25 @@ export class StatusBar {
     };
     this.syncBtn.title = titles[status] || '';
     this.syncBtn.style.color = status === 'error' ? '#e53e3e' : 'var(--text-secondary)';
+  }
+
+  showMessage(message: string, level: 'info' | 'warn' | 'error' = 'info', duration = 3000): void {
+    if (this.messageTimer) {
+      clearTimeout(this.messageTimer);
+    }
+
+    const colors: Record<typeof level, string> = {
+      info: 'var(--text-secondary)',
+      warn: '#d69e2e',
+      error: '#e53e3e',
+    };
+    this.wordCountEl.textContent = message;
+    this.wordCountEl.style.color = colors[level];
+    this.messageTimer = setTimeout(() => {
+      this.wordCountEl.style.color = '';
+      this.renderWordCount();
+      this.messageTimer = null;
+    }, duration);
   }
 
   updateThemeIcon(): void {

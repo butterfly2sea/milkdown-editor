@@ -189,7 +189,18 @@ fn is_markdown_file(path: &str) -> bool {
     path.ends_with(".md") || path.ends_with(".markdown")
 }
 
+fn is_safe_path(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    p.is_absolute()
+        && !path.contains('\0')
+        && !p.components().any(|c| matches!(c, std::path::Component::ParentDir))
+        && p.exists()
+}
+
 fn is_openable_path(path: &str) -> bool {
+    if !is_safe_path(path) {
+        return false;
+    }
     let p = std::path::Path::new(path);
     is_markdown_file(path) || p.is_dir()
 }
@@ -218,7 +229,7 @@ pub fn run() {
             // Clear stale WebView cache after version upgrade
             clear_webview_cache_on_upgrade(app);
 
-            let menu = build_menu(&app.handle());
+            let menu = build_menu(app.handle());
             app.set_menu(menu)?;
 
             // Initialize pending file state

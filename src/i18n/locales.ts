@@ -126,6 +126,11 @@ export interface Locale {
   syncStatusIdle: string;
   syncStatusSyncing: string;
   syncStatusError: string;
+  tauriFeatureUnavailable: string;
+  externalChangeCheckFailed: string;
+  dropFileCheckFailed: string;
+  appInitFailed: string;
+  reload: string;
   minutes: string;
 
   // Default content
@@ -234,6 +239,11 @@ export const en: Locale = {
   syncStatusIdle: 'Synced',
   syncStatusSyncing: 'Syncing...',
   syncStatusError: 'Sync error',
+  tauriFeatureUnavailable: 'Some desktop features are unavailable',
+  externalChangeCheckFailed: 'Could not check external file changes',
+  dropFileCheckFailed: 'Could not read dropped item',
+  appInitFailed: 'App init failed',
+  reload: 'Reload',
   minutes: 'minutes',
   welcomeTitle: 'Welcome to Milkdown Editor',
   welcomeSubtitle: 'Start typing your markdown here...',
@@ -340,6 +350,11 @@ export const zh: Locale = {
   syncStatusIdle: '已同步',
   syncStatusSyncing: '同步中...',
   syncStatusError: '同步错误',
+  tauriFeatureUnavailable: '部分桌面功能不可用',
+  externalChangeCheckFailed: '无法检查外部文件变更',
+  dropFileCheckFailed: '无法读取拖放项目',
+  appInitFailed: '应用初始化失败 / App init failed',
+  reload: '重启 / Reload',
   minutes: '分钟',
   welcomeTitle: '欢迎使用 Milkdown 编辑器',
   welcomeSubtitle: '在这里开始书写你的 Markdown...',

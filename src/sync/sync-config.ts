@@ -60,12 +60,10 @@ export function getSyncMapping(localPath: string): SyncMapping | undefined {
   return getSyncMappings().find(m => m.localPath === localPath);
 }
 
-/** Fast string hash for content comparison (not cryptographic) */
-export function contentHash(content: string): string {
-  let h = 0;
-  for (let i = 0; i < content.length; i++) {
-    h = ((h << 5) - h) + content.charCodeAt(i);
-    h |= 0;
-  }
-  return h.toString(36);
+export async function contentHash(content: string): Promise<string> {
+  const data = new TextEncoder().encode(content);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
