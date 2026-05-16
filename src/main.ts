@@ -20,14 +20,36 @@ import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange
 import { SyncManager } from './sync/sync-manager';
 import { showAboutModal } from './about/about-modal';
 import { MenuEvents, type MenuEvent } from './types/menu-events';
+import { EventManager } from './utils/event-manager';
 
 const defaultContent = '';
+
+function renderFatalError(err: unknown): void {
+  console.error('[FATAL] App init failed:', err);
+  const message = err instanceof Error ? err.stack || err.message : String(err);
+
+  document.body.replaceChildren();
+  const container = document.createElement('div');
+  container.style.cssText = 'padding:24px;font-family:monospace;color:#c00';
+
+  const heading = document.createElement('h2');
+  heading.textContent = i18n.t.appInitFailed;
+  const pre = document.createElement('pre');
+  pre.textContent = message;
+  const button = document.createElement('button');
+  button.textContent = i18n.t.reload;
+  button.addEventListener('click', () => location.reload());
+
+  container.append(heading, pre, button);
+  document.body.appendChild(container);
+}
 
 async function main() {
   // Initialize i18n before anything else
   i18n.init();
   // Restore PlantUML server URL from localStorage
   initPlantUMLServerFromStorage();
+  const eventManager = new EventManager();
 
   const root = document.getElementById('editor-root');
   const titlebarEl = document.getElementById('titlebar');
@@ -38,16 +60,29 @@ async function main() {
     throw new Error('Required DOM elements not found');
   }
 
+  let statusBar: StatusBar | null = null;
+  let pendingStatusWarning: string | null = null;
+  const showStatusWarning = (message: string) => {
+    if (statusBar) {
+      statusBar.showMessage(message, 'warn');
+    } else {
+      pendingStatusWarning = message;
+    }
+  };
+
   // Platform detection & disable native context menu in Tauri (desktop app)
   if ('__TAURI_INTERNALS__' in window) {
     import('@tauri-apps/plugin-os').then(({ platform }) => {
       const os = platform();
       document.body.classList.add(`platform-${os}`);
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn('[tauri] platform detection failed:', err);
+      showStatusWarning(i18n.t.tauriFeatureUnavailable);
+    });
 
     // Prevent WebView native context menu (Reload, Inspect, etc.)
     // Custom context menus use stopPropagation + their own preventDefault
-    document.addEventListener('contextmenu', (e) => {
+    eventManager.on(document, 'contextmenu', (e) => {
       // Allow custom context menus on file tree items (they handle their own preventDefault)
       if (!(e.target as HTMLElement).closest('.ctx-menu')) {
         e.preventDefault();
@@ -57,7 +92,10 @@ async function main() {
 
   // Initialize UI components
   const titleBar = new TitleBar(titlebarEl);
-  const statusBar = new StatusBar(statusbarEl);
+  statusBar = new StatusBar(statusbarEl);
+  if (pendingStatusWarning) {
+    statusBar.showMessage(pendingStatusWarning, 'warn');
+  }
   const fileManager = new FileManager();
 
   // Initialize sidebar tabs first, then create FileTree inside the files container
@@ -103,8 +141,8 @@ async function main() {
       statusBar.updateCursorPosition(line, col);
     }
   };
-  root.addEventListener('click', updateCursorPos);
-  root.addEventListener('keyup', (e) => {
+  eventManager.on(root, 'click', updateCursorPos);
+  eventManager.on(root, 'keyup', (e) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
       updateCursorPos();
     }
@@ -390,7 +428,7 @@ async function main() {
   };
 
   // Sync source textarea changes for word count
-  sourceTextarea.addEventListener('input', () => {
+  eventManager.on(sourceTextarea, 'input', () => {
     const reallyChanged = fileManager.hasRealChanges(sourceTextarea.value);
     fileManager.hasUnsavedChanges = reallyChanged;
     titleBar.setUnsaved(reallyChanged);
@@ -410,7 +448,7 @@ async function main() {
 
   // -- Keyboard shortcuts --
 
-  registerKeymap({
+  eventManager.addCleanup(registerKeymap({
     save: saveFile,
     saveAs,
     open: () => openFile(),
@@ -425,55 +463,78 @@ async function main() {
     },
     find: () => searchBar.show(false),
     findReplace: () => searchBar.show(true),
-  });
+  }));
 
   // Warn before leaving with unsaved changes
-  window.addEventListener('beforeunload', (e) => {
+  eventManager.on(window, 'beforeunload', (e) => {
     if (fileManager.hasUnsavedChanges) {
       e.preventDefault();
     }
   });
 
   // -- External file change detection & file tree refresh on window focus --
-  window.addEventListener('focus', async () => {
-    // Check if current file was modified externally
-    if (fileManager.currentPath) {
-      const changed = await fileManager.checkExternalChange();
-      if (changed) {
-        const message = fileManager.hasUnsavedChanges
-          ? i18n.t.fileChangedDiscardReload
-          : i18n.t.fileChangedReload;
-        if (confirm(message)) {
-          const content = await fileManager.reloadFile();
-          if (content !== null) {
-            editor.setMarkdown(content);
-            root.scrollTop = 0;
-            titleBar.setFileName(fileManager.currentFileName);
-            titleBar.setUnsaved(false);
-            statusBar.updateWordCount(content);
+  eventManager.on(window, 'focus', async () => {
+    try {
+      // Check if current file was modified externally
+      if (fileManager.currentPath) {
+        const changed = await fileManager.checkExternalChange();
+        if (changed) {
+          const message = fileManager.hasUnsavedChanges
+            ? i18n.t.fileChangedDiscardReload
+            : i18n.t.fileChangedReload;
+          if (confirm(message)) {
+            const content = await fileManager.reloadFile();
+            if (content !== null) {
+              editor.setMarkdown(content);
+              root.scrollTop = 0;
+              titleBar.setFileName(fileManager.currentFileName);
+              titleBar.setUnsaved(false);
+              statusBar.updateWordCount(content);
+            }
+          } else {
+            await fileManager.dismissExternalChange();
           }
-        } else {
-          await fileManager.dismissExternalChange();
         }
       }
-    }
 
-    // Refresh file tree if a folder is open
-    if (fileManager.hasFolderOpen) {
-      const tree = await fileManager.refreshFolder();
-      if (tree) {
-        fileTree.render(tree);
-        // Re-highlight active file
-        if (fileManager.currentPath) {
-          fileTree.setActiveFile(fileManager.currentPath);
+      // Refresh file tree if a folder is open
+      if (fileManager.hasFolderOpen) {
+        const tree = await fileManager.refreshFolder();
+        if (tree) {
+          fileTree.render(tree);
+          // Re-highlight active file
+          if (fileManager.currentPath) {
+            fileTree.setActiveFile(fileManager.currentPath);
+          }
         }
       }
+    } catch (err) {
+      console.warn('[file] external change check failed:', err);
+      statusBar.showMessage(i18n.t.externalChangeCheckFailed, 'warn');
     }
   });
 
+  eventManager.addCleanup(() => {
+    if (tocTimer) {
+      clearTimeout(tocTimer);
+      tocTimer = null;
+    }
+    syncManager.stop();
+  });
+
+  eventManager.on(window, 'pagehide', () => {
+    eventManager.cleanup();
+  }, { once: true });
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      eventManager.cleanup();
+    });
+  }
+
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
-    import('@tauri-apps/api/event').then(({ listen }) => {
+    eventManager.addAsyncCleanup(import('@tauri-apps/api/event').then(async ({ listen }) => {
       const menuHandlers: Record<MenuEvent, () => void> = {
         [MenuEvents.NEW]: () => newFile(),
         [MenuEvents.OPEN]: () => openFile(),
@@ -517,94 +578,106 @@ async function main() {
         [MenuEvents.ABOUT]: () => showAboutModal(),
       };
 
-      for (const [event, handler] of Object.entries(menuHandlers)) {
+      const unlistenPromises = Object.entries(menuHandlers).map(([event, handler]) =>
         listen(event, () => {
           console.log('[menu] received:', event);
           handler();
-        });
-      }
+        }),
+      );
 
       // Listen for file open from OS file association / single-instance
-      listen<string>('open-file', (event) => {
+      unlistenPromises.push(listen<string>('open-file', (event) => {
         console.log('[open-file] received:', event.payload);
         openFile(event.payload);
-      });
+      }));
 
       // Listen for folder open from OS right-click / single-instance
-      listen<string>('open-folder-path', (event) => {
+      unlistenPromises.push(listen<string>('open-folder-path', (event) => {
         console.log('[open-folder-path] received:', event.payload);
         openFolderByPath(event.payload);
-      });
+      }));
 
-      // Check for pending file/folder from OS launch (file association / double-click)
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke<string | null>('take_pending_file').then(async (path) => {
-          if (!path) return;
-          console.log('[pending-path] opening:', path);
-          // Use fs plugin to check if path is a directory
-          try {
-            const { stat } = await import('@tauri-apps/plugin-fs');
-            const info = await stat(path);
-            if (info.isDirectory) {
-              openFolderByPath(path);
-            } else {
-              openFile(path);
-            }
-          } catch {
-            // Fallback: try as file
+      const unlistens = await Promise.all(unlistenPromises);
+      return () => {
+        for (const unlisten of unlistens) {
+          unlisten();
+        }
+      };
+    }));
+
+    // Check for pending file/folder from OS launch (file association / double-click)
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<string | null>('take_pending_file').then(async (path) => {
+        if (!path) return;
+        console.log('[pending-path] opening:', path);
+        // Use fs plugin to check if path is a directory
+        try {
+          const { stat } = await import('@tauri-apps/plugin-fs');
+          const info = await stat(path);
+          if (info.isDirectory) {
+            openFolderByPath(path);
+          } else {
             openFile(path);
           }
-        });
-      });
-
-      // Drag-and-drop file support
-      import('@tauri-apps/api/webview').then(({ getCurrentWebview }) => {
-        const dropOverlay = document.createElement('div');
-        dropOverlay.id = 'drop-overlay';
-        const dropLabel = document.createElement('div');
-        dropLabel.className = 'drop-overlay-content';
-        dropLabel.textContent = i18n.t.dropToOpen;
-        dropOverlay.appendChild(dropLabel);
-        document.body.appendChild(dropOverlay);
-
-        i18n.onChange(() => {
-          dropLabel.textContent = i18n.t.dropToOpen;
-        });
-
-        let lastDropTime = 0;
-        getCurrentWebview().onDragDropEvent(async (event) => {
-          if (event.payload.type === 'enter' || event.payload.type === 'over') {
-            dropOverlay.classList.add('visible');
-          } else if (event.payload.type === 'drop') {
-            dropOverlay.classList.remove('visible');
-            const now = Date.now();
-            if (now - lastDropTime < 500) return;
-            lastDropTime = now;
-            const paths = event.payload.paths;
-            // Check first path: if it's a directory, open as folder tree
-            if (paths.length > 0) {
-              try {
-                const { stat } = await import('@tauri-apps/plugin-fs');
-                const info = await stat(paths[0]);
-                if (info.isDirectory) {
-                  openFolderByPath(paths[0]);
-                  return;
-                }
-              } catch { /* not a directory, try as file */ }
-              const mdFile = paths.find(
-                (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
-              );
-              if (mdFile) {
-                openFile(mdFile);
-              }
-            }
-          } else if (event.payload.type === 'leave') {
-            dropOverlay.classList.remove('visible');
-          }
-        });
+        } catch {
+          // Fallback: try as file
+          openFile(path);
+        }
       });
     });
+
+    // Drag-and-drop file support
+    eventManager.addAsyncCleanup(import('@tauri-apps/api/webview').then(async ({ getCurrentWebview }) => {
+      const dropOverlay = document.createElement('div');
+      dropOverlay.id = 'drop-overlay';
+      const dropLabel = document.createElement('div');
+      dropLabel.className = 'drop-overlay-content';
+      dropLabel.textContent = i18n.t.dropToOpen;
+      dropOverlay.appendChild(dropLabel);
+      document.body.appendChild(dropOverlay);
+
+      const unsubscribeI18n = i18n.onChange(() => {
+        dropLabel.textContent = i18n.t.dropToOpen;
+      });
+
+      let lastDropTime = 0;
+      const unlistenDragDrop = await getCurrentWebview().onDragDropEvent(async (event) => {
+        if (event.payload.type === 'enter' || event.payload.type === 'over') {
+          dropOverlay.classList.add('visible');
+        } else if (event.payload.type === 'drop') {
+          dropOverlay.classList.remove('visible');
+          const now = Date.now();
+          if (now - lastDropTime < 500) return;
+          lastDropTime = now;
+          const paths = event.payload.paths;
+          // Check first path: if it's a directory, open as folder tree
+          if (paths.length > 0) {
+            try {
+              const { stat } = await import('@tauri-apps/plugin-fs');
+              const info = await stat(paths[0]);
+              if (info.isDirectory) {
+                openFolderByPath(paths[0]);
+                return;
+              }
+            } catch { /* not a directory, try as file */ }
+            const mdFile = paths.find(
+              (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
+            );
+            if (mdFile) {
+              openFile(mdFile);
+            }
+          }
+        } else if (event.payload.type === 'leave') {
+          dropOverlay.classList.remove('visible');
+        }
+      });
+      return () => {
+        unlistenDragDrop();
+        unsubscribeI18n();
+        dropOverlay.remove();
+      };
+    }));
   }
 }
 
-main().catch(console.error);
+main().catch(renderFatalError);

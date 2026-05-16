@@ -209,7 +209,18 @@ fn is_markdown_file(path: &str) -> bool {
     path.ends_with(".md") || path.ends_with(".markdown")
 }
 
+fn is_safe_path(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    p.is_absolute()
+        && !path.contains('\0')
+        && !p.components().any(|c| matches!(c, std::path::Component::ParentDir))
+        && p.exists()
+}
+
 fn is_openable_path(path: &str) -> bool {
+    if !is_safe_path(path) {
+        return false;
+    }
     let p = std::path::Path::new(path);
     is_markdown_file(path) || p.is_dir()
 }
