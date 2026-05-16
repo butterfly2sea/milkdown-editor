@@ -44,8 +44,11 @@ class I18n {
     this.listeners.forEach((fn) => fn(this._locale, lang));
   }
 
-  onChange(fn: ChangeListener): void {
+  onChange(fn: ChangeListener): () => void {
     this.listeners.push(fn);
+    return () => {
+      this.listeners = this.listeners.filter((listener) => listener !== fn);
+    };
   }
 
   get availableLanguages(): { code: string; label: string }[] {
