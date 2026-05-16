@@ -25,11 +25,14 @@ export interface Locale {
 
   // PlantUML
   plantumlPlaceholder: string;
+  plantumlPreviewTitle: string;
+  plantumlSourcePlaceholder: string;
   plantumlRendering: string;
   plantumlRenderFailed: string;
   plantumlCheckNetwork: string;
   plantumlCopySVG: string;
   plantumlCopyPNG: string;
+  plantumlCopyFailed: string;
   plantumlDone: string;
 
   // Math
@@ -157,11 +160,14 @@ export const en: Locale = {
   createFailed: 'Failed to create file',
   newFileMenu: 'New File',
   plantumlPlaceholder: 'Enter PlantUML code to preview',
+  plantumlPreviewTitle: 'Click to edit, right-click to copy',
+  plantumlSourcePlaceholder: '@startuml\nAlice -> Bob: Hello\n@enduml',
   plantumlRendering: 'Rendering...',
   plantumlRenderFailed: 'Rendering failed',
   plantumlCheckNetwork: 'Check network or configure PlantUML server',
   plantumlCopySVG: 'Copy as SVG',
   plantumlCopyPNG: 'Copy as PNG',
+  plantumlCopyFailed: 'Failed to copy PlantUML image',
   plantumlDone: 'Done',
   mathPlaceholder: 'Enter LaTeX...',
   mathToggleSource: 'Toggle LaTeX source',
@@ -269,11 +275,14 @@ export const zh: Locale = {
   createFailed: '创建文件失败',
   newFileMenu: '新建文件',
   plantumlPlaceholder: '输入 PlantUML 代码以预览',
+  plantumlPreviewTitle: '点击编辑，右键复制',
+  plantumlSourcePlaceholder: '@startuml\nAlice -> Bob: Hello\n@enduml',
   plantumlRendering: '渲染中...',
   plantumlRenderFailed: '渲染失败',
   plantumlCheckNetwork: '请检查网络或配置 PlantUML 服务器',
   plantumlCopySVG: '复制为 SVG',
   plantumlCopyPNG: '复制为 PNG',
+  plantumlCopyFailed: '复制 PlantUML 图片失败',
   plantumlDone: '完成',
   mathPlaceholder: '输入 LaTeX...',
   mathToggleSource: '切换 LaTeX 源码',

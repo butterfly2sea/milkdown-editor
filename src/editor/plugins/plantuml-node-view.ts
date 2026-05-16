@@ -1,120 +1,23 @@
 import type { NodeViewConstructor } from '@milkdown/kit/prose/view';
+import { i18n } from '../../i18n';
+import { EventManager } from '../../utils/event-manager';
 import { getPlantUMLServer } from './plantuml-plugin';
-
-async function encodePlantUML(text: string): Promise<string> {
-  const { encode } = await import('plantuml-encoder');
-  return encode(text);
-}
-
-// Convert SVG element to PNG blob
-function svgToPngBlob(svgEl: SVGElement, scale = 2): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const svgData = new XMLSerializer().serializeToString(svgEl);
-    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext('2d')!;
-      ctx.scale(scale, scale);
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
-      canvas.toBlob((blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error('Failed to create PNG blob'));
-      }, 'image/png');
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load SVG'));
-    };
-    img.src = url;
-  });
-}
-
-function showFullscreenSvg(svgEl: SVGElement): void {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-    display: flex; justify-content: center; align-items: center;
-    z-index: 2000; cursor: grab;
-  `;
-
-  const container = document.createElement('div');
-  container.style.cssText = 'transform-origin: center; transition: none;';
-  const clone = svgEl.cloneNode(true) as SVGElement;
-  clone.style.maxWidth = '90vw';
-  clone.style.maxHeight = '90vh';
-  clone.style.width = 'auto';
-  clone.style.height = 'auto';
-  container.appendChild(clone);
-  overlay.appendChild(container);
-
-  let scale = 1;
-  let translateX = 0;
-  let translateY = 0;
-  let dragging = false;
-  let startX = 0;
-  let startY = 0;
-
-  const updateTransform = () => {
-    container.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-  };
-
-  overlay.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    scale = Math.max(0.1, Math.min(10, scale * delta));
-    updateTransform();
-  }, { passive: false });
-
-  overlay.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-      dragging = true;
-      startX = e.clientX - translateX;
-      startY = e.clientY - translateY;
-      overlay.style.cursor = 'grabbing';
-    }
-  });
-
-  overlay.addEventListener('mousemove', (e) => {
-    if (dragging) {
-      translateX = e.clientX - startX;
-      translateY = e.clientY - startY;
-      updateTransform();
-    }
-  });
-
-  overlay.addEventListener('mouseup', () => {
-    dragging = false;
-    overlay.style.cursor = 'grab';
-  });
-
-  // Close on Escape or click outside SVG
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') close();
-  };
-  const close = () => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKeyDown);
-  };
-  overlay.addEventListener('dblclick', close);
-  document.addEventListener('keydown', onKeyDown);
-
-  document.body.appendChild(overlay);
-}
+import { showPlantUMLCopyMenu } from './plantuml/clipboard';
+import { DisposableDebounce, scheduleDisposableTimeout } from './plantuml/debounce';
+import { showFullscreenSvg } from './plantuml/fullscreen';
+import { renderPlantUMLSvg, type PlantUMLRenderResult } from './plantuml/renderer';
 
 export function createPlantUMLNodeView(): NodeViewConstructor {
   return (node, view, getPos) => {
+    const events = new EventManager();
+    const renderDebounce = new DisposableDebounce(500);
     let currentValue: string = node.attrs.value || '';
-    let isEditing = !currentValue;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    let lastSvgText: string = '';
+    let disposed = false;
+    let renderToken = 0;
+    let copyMenuCleanup: (() => void) | null = null;
+    let fullscreenCleanup: (() => void) | null = null;
+    let focusCleanup: (() => void) | null = null;
 
-    // Container
     const dom = document.createElement('div');
     dom.className = 'plantuml-wrapper';
     dom.style.cssText = `
@@ -125,7 +28,6 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       transition: border-color 0.15s;
     `;
 
-    // Preview area
     const previewEl = document.createElement('div');
     previewEl.className = 'plantuml-preview';
     previewEl.style.cssText = `
@@ -138,19 +40,8 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       background: var(--bg-primary, #fff);
       position: relative;
     `;
-    previewEl.title = 'Click to edit, right-click to copy';
+    previewEl.title = i18n.t.plantumlPreviewTitle;
 
-    // Right-click context menu on preview
-    previewEl.addEventListener('contextmenu', (e) => {
-      const svgEl = previewEl.querySelector('svg');
-      if (!svgEl) return; // No SVG rendered, use default menu
-
-      e.preventDefault();
-      e.stopPropagation();
-      showCopyMenu(e.clientX, e.clientY, svgEl as SVGElement);
-    });
-
-    // Editor area
     const editorEl = document.createElement('div');
     editorEl.className = 'plantuml-editor';
     editorEl.style.cssText = `
@@ -158,7 +49,6 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       border-top: 1px solid var(--border-color, #e8e8e8);
     `;
 
-    // Label
     const labelEl = document.createElement('div');
     labelEl.className = 'plantuml-label';
     labelEl.textContent = 'PlantUML';
@@ -173,9 +63,8 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       align-items: center;
     `;
 
-    // Collapse button
     const collapseBtn = document.createElement('button');
-    collapseBtn.textContent = 'Done';
+    collapseBtn.textContent = i18n.t.plantumlDone;
     collapseBtn.style.cssText = `
       font-size: 11px;
       padding: 1px 8px;
@@ -185,17 +74,12 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       color: var(--text-secondary, #666);
       cursor: pointer;
     `;
-    collapseBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      setEditing(false);
-    });
     labelEl.appendChild(collapseBtn);
 
-    // Textarea
     const textarea = document.createElement('textarea');
     textarea.className = 'plantuml-source';
     textarea.value = currentValue;
-    textarea.placeholder = '@startuml\nAlice -> Bob: Hello\n@enduml';
+    textarea.placeholder = i18n.t.plantumlSourcePlaceholder;
     textarea.spellcheck = false;
     textarea.style.cssText = `
       width: 100%;
@@ -210,63 +94,92 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
       color: var(--text-primary, #333);
     `;
 
-    textarea.addEventListener('input', () => {
-      currentValue = textarea.value;
-      updateProseMirrorNode();
-      debouncedRender();
-    });
-
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setEditing(false);
-      }
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
-        textarea.selectionStart = textarea.selectionEnd = start + 2;
-        currentValue = textarea.value;
-        updateProseMirrorNode();
-        debouncedRender();
-      }
-    });
-
     editorEl.appendChild(labelEl);
     editorEl.appendChild(textarea);
-
-    // Click preview to edit
-    previewEl.addEventListener('click', () => {
-      setEditing(true);
-    });
-
-    // Double-click preview to fullscreen view
-    previewEl.addEventListener('dblclick', (e) => {
-      e.stopPropagation();
-      const svgEl = previewEl.querySelector('svg');
-      if (!svgEl) return;
-      showFullscreenSvg(svgEl as SVGElement);
-    });
-
     dom.appendChild(previewEl);
     dom.appendChild(editorEl);
 
-    function setEditing(editing: boolean) {
-      isEditing = editing;
-      if (editing) {
-        editorEl.style.display = 'block';
-        previewEl.style.cursor = 'default';
-        dom.style.borderColor = 'var(--accent, #0366d6)';
-        setTimeout(() => textarea.focus(), 0);
-      } else {
-        editorEl.style.display = 'none';
-        previewEl.style.cursor = 'pointer';
-        dom.style.borderColor = 'var(--border-color, #e8e8e8)';
-      }
-    }
+    const closeCopyMenu = () => {
+      copyMenuCleanup?.();
+      copyMenuCleanup = null;
+    };
 
-    function updateProseMirrorNode() {
+    const closeFullscreen = () => {
+      fullscreenCleanup?.();
+      fullscreenCleanup = null;
+    };
+
+    const setPreviewMessage = (text: string): void => {
+      const span = document.createElement('span');
+      span.textContent = text;
+      span.style.cssText = 'color: var(--text-muted, #999); font-size: 13px;';
+      previewEl.replaceChildren(span);
+    };
+
+    const setPreviewError = (message: string): void => {
+      const container = document.createElement('div');
+      container.style.cssText = `
+        color: #e53e3e;
+        font-size: 12px;
+        white-space: pre-wrap;
+        max-height: 200px;
+        overflow-y: auto;
+        text-align: left;
+        padding: 8px;
+      `;
+      const details = document.createElement('div');
+      details.textContent = message.length > 1000 ? `${message.substring(0, 1000)}...` : message;
+      const hint = document.createElement('span');
+      hint.textContent = i18n.t.plantumlCheckNetwork;
+      hint.style.cssText = 'color: var(--text-muted, #999);';
+      container.appendChild(details);
+      container.appendChild(document.createElement('br'));
+      container.appendChild(hint);
+      previewEl.replaceChildren(container);
+    };
+
+    const setPreviewSvg = (svg: string): void => {
+      previewEl.innerHTML = svg;
+      const svgEl = previewEl.querySelector('svg');
+      if (!svgEl) return;
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.height = 'auto';
+    };
+
+    const applyRenderResult = (result: PlantUMLRenderResult): void => {
+      if (result.type === 'empty') {
+        setPreviewMessage(i18n.t.plantumlPlaceholder);
+        return;
+      }
+      if (result.type === 'error') {
+        setPreviewError(result.message);
+        return;
+      }
+      setPreviewSvg(result.svg);
+    };
+
+    const renderPreview = async (): Promise<void> => {
+      const token = ++renderToken;
+      const value = currentValue;
+      const server = getPlantUMLServer();
+      if (!value.trim()) {
+        applyRenderResult({ type: 'empty' });
+        return;
+      }
+
+      setPreviewMessage(i18n.t.plantumlRendering);
+      const result = await renderPlantUMLSvg(value, server);
+      if (disposed || token !== renderToken || value !== currentValue) return;
+      applyRenderResult(result);
+    };
+
+    const debouncedRender = (): void => {
+      renderDebounce.schedule(() => {
+        void renderPreview();
+      });
+    };
+
+    const updateProseMirrorNode = (): void => {
       const pos = getPos();
       if (pos == null) return;
       const tr = view.state.tr.setNodeMarkup(pos, undefined, {
@@ -274,154 +187,78 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
         value: currentValue,
       });
       view.dispatch(tr);
-    }
+    };
 
-    function debouncedRender() {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => renderPreview(), 500);
-    }
+    const setEditing = (editing: boolean): void => {
+      focusCleanup?.();
+      focusCleanup = null;
 
-    async function renderPreview() {
-      if (!currentValue.trim()) {
-        previewEl.innerHTML = '<span style="color: var(--text-muted, #999); font-size: 13px;">Enter PlantUML code to preview</span>';
-        lastSvgText = '';
+      if (editing) {
+        editorEl.style.display = 'block';
+        previewEl.style.cursor = 'default';
+        dom.style.borderColor = 'var(--accent, #0366d6)';
+        focusCleanup = scheduleDisposableTimeout(() => textarea.focus(), 0);
         return;
       }
 
-      previewEl.innerHTML = '<span style="color: var(--text-muted, #999); font-size: 13px;">Rendering...</span>';
+      editorEl.style.display = 'none';
+      previewEl.style.cursor = 'pointer';
+      dom.style.borderColor = 'var(--border-color, #e8e8e8)';
+    };
 
-      try {
-        const encoded = await encodePlantUML(currentValue);
-        const server = getPlantUMLServer();
-        const url = `${server}/svg/${encoded}`;
+    events.on(previewEl, 'contextmenu', (e) => {
+      const svgEl = previewEl.querySelector('svg');
+      if (!svgEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeCopyMenu();
+      copyMenuCleanup = showPlantUMLCopyMenu(e.clientX, e.clientY, svgEl as SVGElement);
+    });
 
-        const response = await fetch(url);
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(errorBody || `HTTP ${response.status}`);
-        }
+    events.on(collapseBtn, 'click', (e) => {
+      e.stopPropagation();
+      setEditing(false);
+    });
 
-        const svg = await response.text();
-        if (svg.includes('<svg')) {
-          // Extract SVG part (skip XML declaration if present)
-          const svgStart = svg.indexOf('<svg');
-          lastSvgText = svg.substring(svgStart);
-          previewEl.innerHTML = lastSvgText;
+    events.on(textarea, 'input', () => {
+      currentValue = textarea.value;
+      updateProseMirrorNode();
+      debouncedRender();
+    });
 
-          const svgEl = previewEl.querySelector('svg');
-          if (svgEl) {
-            svgEl.style.maxWidth = '100%';
-            svgEl.style.height = 'auto';
-          }
-        } else {
-          throw new Error('Invalid SVG response');
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        lastSvgText = '';
-        const sanitized = msg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const truncated = sanitized.length > 1000 ? sanitized.substring(0, 1000) + '...' : sanitized;
-        previewEl.innerHTML = `<div style="color: #e53e3e; font-size: 12px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; text-align: left; padding: 8px;">${truncated}<br><span style="color: var(--text-muted, #999);">Check syntax or configure PlantUML server</span></div>`;
+    events.on(textarea, 'keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setEditing(false);
       }
-    }
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + 2;
+      currentValue = textarea.value;
+      updateProseMirrorNode();
+      debouncedRender();
+    });
 
-    function showCopyMenu(x: number, y: number, svgEl: SVGElement) {
-      // Remove existing menu
-      document.querySelector('.plantuml-ctx-menu')?.remove();
+    events.on(previewEl, 'click', () => {
+      setEditing(true);
+    });
 
-      const menu = document.createElement('div');
-      menu.className = 'plantuml-ctx-menu';
-      menu.style.cssText = `
-        position: fixed;
-        left: ${x}px;
-        top: ${y}px;
-        background: var(--bg-elevated, #fff);
-        border: 1px solid var(--border-color, #e8e8e8);
-        border-radius: 6px;
-        box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,0.1));
-        overflow: hidden;
-        z-index: 300;
-        min-width: 150px;
-      `;
+    events.on(previewEl, 'dblclick', (e) => {
+      e.stopPropagation();
+      const svgEl = previewEl.querySelector('svg');
+      if (!svgEl) return;
+      closeFullscreen();
+      fullscreenCleanup = showFullscreenSvg(svgEl as SVGElement);
+    });
 
-      const items = [
-        {
-          label: 'Copy as SVG',
-          action: async () => {
-            try {
-              const svgData = new XMLSerializer().serializeToString(svgEl);
-              await navigator.clipboard.write([
-                new ClipboardItem({
-                  'text/plain': new Blob([svgData], { type: 'text/plain' }),
-                }),
-              ]);
-            } catch {
-              // Fallback: copy as text
-              const svgData = new XMLSerializer().serializeToString(svgEl);
-              await navigator.clipboard.writeText(svgData);
-            }
-          },
-        },
-        {
-          label: 'Copy as PNG',
-          action: async () => {
-            try {
-              const pngBlob = await svgToPngBlob(svgEl);
-              await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': pngBlob }),
-              ]);
-            } catch (err) {
-              console.error('Failed to copy as PNG:', err);
-            }
-          },
-        },
-      ];
-
-      for (const item of items) {
-        const btn = document.createElement('button');
-        btn.textContent = item.label;
-        btn.style.cssText = `
-          display: block;
-          width: 100%;
-          padding: 8px 14px;
-          border: none;
-          background: transparent;
-          color: var(--text-primary, #333);
-          cursor: pointer;
-          font-size: 13px;
-          text-align: left;
-          white-space: nowrap;
-        `;
-        btn.addEventListener('mouseenter', () => {
-          btn.style.background = 'var(--sidebar-hover, #e8e8e8)';
-        });
-        btn.addEventListener('mouseleave', () => {
-          btn.style.background = 'transparent';
-        });
-        btn.addEventListener('click', () => {
-          menu.remove();
-          item.action();
-        });
-        menu.appendChild(btn);
-      }
-
-      document.body.appendChild(menu);
-
-      const closeMenu = (ev: MouseEvent) => {
-        if (!menu.contains(ev.target as Node)) {
-          menu.remove();
-          document.removeEventListener('click', closeMenu);
-        }
-      };
-      setTimeout(() => document.addEventListener('click', closeMenu), 0);
-    }
-
-    // Initial state
     if (currentValue) {
-      renderPreview();
+      void renderPreview();
       setEditing(false);
     } else {
-      previewEl.innerHTML = '<span style="color: var(--text-muted, #999); font-size: 13px;">Enter PlantUML code to preview</span>';
+      setPreviewMessage(i18n.t.plantumlPlaceholder);
       setEditing(true);
     }
 
@@ -441,7 +278,13 @@ export function createPlantUMLNodeView(): NodeViewConstructor {
         return true;
       },
       destroy: () => {
-        if (debounceTimer) clearTimeout(debounceTimer);
+        disposed = true;
+        renderToken += 1;
+        renderDebounce.dispose();
+        focusCleanup?.();
+        closeCopyMenu();
+        closeFullscreen();
+        events.cleanup();
       },
     };
   };
