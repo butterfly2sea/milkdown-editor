@@ -1,4 +1,4 @@
-import { fetch } from '@tauri-apps/plugin-http';
+import { fetch, type ClientOptions } from '@tauri-apps/plugin-http';
 
 export interface RemoteFileInfo {
   path: string;
@@ -7,6 +7,8 @@ export interface RemoteFileInfo {
   mtime: number;
   size: number;
 }
+
+type TauriRequestInit = RequestInit & ClientOptions;
 
 export class WebDAVClient {
   private baseUrl: string = '';
@@ -165,7 +167,7 @@ export class WebDAVClient {
     // Normalize path: remove double slashes, ensure leading slash
     const normalizedPath = ('/' + path).replace(/\/+/g, '/');
     const url = this.baseUrl + normalizedPath;
-    return fetch(url, {
+    const init: TauriRequestInit = {
       method,
       headers: {
         Authorization: this.authHeader,
@@ -177,6 +179,8 @@ export class WebDAVClient {
         acceptInvalidCerts: true,
         acceptInvalidHostnames: true,
       },
-    } as any);
+    };
+
+    return fetch(url, init);
   }
 }
