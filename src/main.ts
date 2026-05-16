@@ -19,6 +19,7 @@ import { i18n } from './i18n';
 import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange } from './settings/settings-modal';
 import { SyncManager } from './sync/sync-manager';
 import { showAboutModal } from './about/about-modal';
+import { EventManager } from './utils/event-manager';
 
 const defaultContent = '';
 
@@ -47,6 +48,7 @@ async function main() {
   i18n.init();
   // Restore PlantUML server URL from localStorage
   initPlantUMLServerFromStorage();
+  const eventManager = new EventManager();
 
   const root = document.getElementById('editor-root');
   const titlebarEl = document.getElementById('titlebar');
@@ -79,7 +81,7 @@ async function main() {
 
     // Prevent WebView native context menu (Reload, Inspect, etc.)
     // Custom context menus use stopPropagation + their own preventDefault
-    document.addEventListener('contextmenu', (e) => {
+    eventManager.on(document, 'contextmenu', (e) => {
       // Allow custom context menus on file tree items (they handle their own preventDefault)
       if (!(e.target as HTMLElement).closest('.ctx-menu')) {
         e.preventDefault();
@@ -138,8 +140,8 @@ async function main() {
       statusBar.updateCursorPosition(line, col);
     }
   };
-  root.addEventListener('click', updateCursorPos);
-  root.addEventListener('keyup', (e) => {
+  eventManager.on(root, 'click', updateCursorPos);
+  eventManager.on(root, 'keyup', (e) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
       updateCursorPos();
     }
@@ -425,7 +427,7 @@ async function main() {
   };
 
   // Sync source textarea changes for word count
-  sourceTextarea.addEventListener('input', () => {
+  eventManager.on(sourceTextarea, 'input', () => {
     const reallyChanged = fileManager.hasRealChanges(sourceTextarea.value);
     fileManager.hasUnsavedChanges = reallyChanged;
     titleBar.setUnsaved(reallyChanged);
@@ -445,7 +447,7 @@ async function main() {
 
   // -- Keyboard shortcuts --
 
-  registerKeymap({
+  eventManager.addCleanup(registerKeymap({
     save: saveFile,
     saveAs,
     open: () => openFile(),
@@ -460,17 +462,17 @@ async function main() {
     },
     find: () => searchBar.show(false),
     findReplace: () => searchBar.show(true),
-  });
+  }));
 
   // Warn before leaving with unsaved changes
-  window.addEventListener('beforeunload', (e) => {
+  eventManager.on(window, 'beforeunload', (e) => {
     if (fileManager.hasUnsavedChanges) {
       e.preventDefault();
     }
   });
 
   // -- External file change detection & file tree refresh on window focus --
-  window.addEventListener('focus', async () => {
+  eventManager.on(window, 'focus', async () => {
     try {
       // Check if current file was modified externally
       if (fileManager.currentPath) {
@@ -510,6 +512,24 @@ async function main() {
       statusBar.showMessage(i18n.t.externalChangeCheckFailed, 'warn');
     }
   });
+
+  eventManager.addCleanup(() => {
+    if (tocTimer) {
+      clearTimeout(tocTimer);
+      tocTimer = null;
+    }
+    syncManager.stop();
+  });
+
+  eventManager.on(window, 'pagehide', () => {
+    eventManager.cleanup();
+  }, { once: true });
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      eventManager.cleanup();
+    });
+  }
 
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
