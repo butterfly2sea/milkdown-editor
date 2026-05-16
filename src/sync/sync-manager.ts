@@ -11,7 +11,10 @@ interface SyncManifestEntry {
   lastSyncedAt: number;
   localHash: string;
   remoteHash: string;
+  hashStale?: boolean;
 }
+
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
 
 export class SyncManager {
   private client = new WebDAVClient();
@@ -70,7 +73,7 @@ export class SyncManager {
       const content = await readTextFile(localPath);
       await this.client.putFile(remotePath, content);
       const info = await stat(localPath);
-      const hash = contentHash(content);
+      const hash = await contentHash(content);
       this.manifest[localPath] = {
         localMtime: info.mtime?.getTime() ?? Date.now(),
         remoteMtime: Date.now(),
@@ -103,7 +106,7 @@ export class SyncManager {
     try {
       await this.client.putFile(mapping.remotePath, content);
       const info = await stat(localPath);
-      const hash = contentHash(content);
+      const hash = await contentHash(content);
       this.manifest[localPath] = {
         localMtime: info.mtime?.getTime() ?? Date.now(),
         remoteMtime: Date.now(),
@@ -148,7 +151,7 @@ export class SyncManager {
       await writeTextFile(localPath, content);
       addSyncMapping(localPath, remotePath);
       const info = await stat(localPath);
-      const hash = contentHash(content);
+      const hash = await contentHash(content);
       this.manifest[localPath] = {
         localMtime: info.mtime?.getTime() ?? Date.now(),
         remoteMtime: Date.now(),
@@ -167,6 +170,7 @@ export class SyncManager {
   private async syncOneFile(mapping: SyncMapping): Promise<void> {
     this.setFileStatus(mapping.localPath, 'syncing');
     const entry = this.manifest[mapping.localPath];
+    const hashStale = entry?.hashStale === true;
 
     // Step 1: Check local mtime
     let localMtime: number | null = null;
@@ -178,10 +182,10 @@ export class SyncManager {
     } catch { /* local file may not exist */ }
 
     // Step 2: If local mtime changed, read content and compute hash
-    const localMtimeChanged = localMtime !== null && (!entry || localMtime !== entry.localMtime);
+    const localMtimeChanged = localMtime !== null && (!entry || localMtime !== entry.localMtime || hashStale);
     if (localMtimeChanged && localMtime !== null) {
       localContent = await readTextFile(mapping.localPath);
-      localHash = contentHash(localContent);
+      localHash = await contentHash(localContent);
     }
 
     // Step 3: Check remote mtime via PROPFIND
@@ -198,10 +202,33 @@ export class SyncManager {
     // Step 4: If remote mtime changed, download content and compute hash
     let remoteContent: string | null = null;
     let remoteHash: string | null = null;
-    const remoteMtimeChanged = remoteMtime !== null && (!entry || remoteMtime !== entry.remoteMtime);
+    const remoteMtimeChanged = remoteMtime !== null && (!entry || remoteMtime !== entry.remoteMtime || hashStale);
     if (remoteMtimeChanged) {
       remoteContent = await this.client.getFile(mapping.remotePath);
-      remoteHash = contentHash(remoteContent);
+      remoteHash = await contentHash(remoteContent);
+    }
+
+    if (hashStale && localMtime !== null && remoteMtime !== null) {
+      if (!localContent) localContent = await readTextFile(mapping.localPath);
+      if (!remoteContent) remoteContent = await this.client.getFile(mapping.remotePath);
+      if (!localHash) localHash = await contentHash(localContent);
+      if (!remoteHash) remoteHash = await contentHash(remoteContent);
+
+      if (localHash === remoteHash) {
+        this.updateManifest(mapping.localPath, localMtime, remoteMtime, localHash, remoteHash);
+      } else {
+        const fileName = mapping.localPath.split('/').pop() || mapping.localPath;
+        const merged = await this.onConflict?.(fileName, localContent, remoteContent);
+        if (merged !== null && merged !== undefined) {
+          await writeTextFile(mapping.localPath, merged);
+          await this.client.putFile(mapping.remotePath, merged);
+          const info = await stat(mapping.localPath);
+          const mergedHash = await contentHash(merged);
+          this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), Date.now(), mergedHash, mergedHash);
+        }
+      }
+      this.setFileStatus(mapping.localPath, 'synced');
+      return;
     }
 
     // Step 5: Compare hashes to determine action
@@ -212,27 +239,27 @@ export class SyncManager {
       // First sync: upload local to remote
       if (localMtime !== null) {
         if (!localContent) localContent = await readTextFile(mapping.localPath);
-        if (!localHash) localHash = contentHash(localContent);
+        if (!localHash) localHash = await contentHash(localContent);
         await this.client.putFile(mapping.remotePath, localContent);
         this.updateManifest(mapping.localPath, localMtime, Date.now(), localHash, localHash);
       }
     } else if (localMtime !== null && remoteMtime === null) {
       // Remote deleted, re-upload
       if (!localContent) localContent = await readTextFile(mapping.localPath);
-      if (!localHash) localHash = contentHash(localContent);
+      if (!localHash) localHash = await contentHash(localContent);
       await this.client.putFile(mapping.remotePath, localContent);
       this.updateManifest(mapping.localPath, localMtime, Date.now(), localHash, localHash);
     } else if (localMtime === null && remoteMtime !== null) {
       // Local deleted, re-download
       if (!remoteContent) remoteContent = await this.client.getFile(mapping.remotePath);
-      if (!remoteHash) remoteHash = contentHash(remoteContent);
+      if (!remoteHash) remoteHash = await contentHash(remoteContent);
       await writeTextFile(mapping.localPath, remoteContent);
       const info = await stat(mapping.localPath);
       this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), remoteMtime, remoteHash, remoteHash);
     } else if (localReallyChanged && !remoteReallyChanged) {
       // Only local changed → upload
       if (!localContent) localContent = await readTextFile(mapping.localPath);
-      if (!localHash) localHash = contentHash(localContent);
+      if (!localHash) localHash = await contentHash(localContent);
       await this.client.putFile(mapping.remotePath, localContent);
       this.updateManifest(mapping.localPath, localMtime!, Date.now(), localHash, localHash);
     } else if (!localReallyChanged && remoteReallyChanged) {
@@ -241,7 +268,7 @@ export class SyncManager {
       const decision = await this.onRemoteChanged?.(fileName) ?? 'ignore';
       if (decision === 'download') {
         if (!remoteContent) remoteContent = await this.client.getFile(mapping.remotePath);
-        if (!remoteHash) remoteHash = contentHash(remoteContent);
+        if (!remoteHash) remoteHash = await contentHash(remoteContent);
         await writeTextFile(mapping.localPath, remoteContent);
         const info = await stat(mapping.localPath);
         this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), remoteMtime!, remoteHash, remoteHash);
@@ -264,7 +291,7 @@ export class SyncManager {
         await writeTextFile(mapping.localPath, merged);
         await this.client.putFile(mapping.remotePath, merged);
         const info = await stat(mapping.localPath);
-        const mergedHash = contentHash(merged);
+        const mergedHash = await contentHash(merged);
         this.updateManifest(mapping.localPath, info.mtime?.getTime() ?? Date.now(), Date.now(), mergedHash, mergedHash);
       }
       // null = user cancelled, skip
@@ -287,8 +314,18 @@ export class SyncManager {
   private loadManifest(): void {
     try {
       const saved = localStorage.getItem('webdav-sync-manifest');
-      this.manifest = saved ? JSON.parse(saved) : {};
+      const manifest = saved ? JSON.parse(saved) as Record<string, SyncManifestEntry> : {};
+      for (const entry of Object.values(manifest)) {
+        if (!this.isSha256Hash(entry.localHash) || !this.isSha256Hash(entry.remoteHash)) {
+          entry.hashStale = true;
+        }
+      }
+      this.manifest = manifest;
     } catch { this.manifest = {}; }
+  }
+
+  private isSha256Hash(hash: string | undefined): boolean {
+    return typeof hash === 'string' && SHA256_HEX_RE.test(hash);
   }
 
   private saveManifest(): void {
