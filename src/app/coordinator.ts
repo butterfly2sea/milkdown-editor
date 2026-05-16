@@ -178,6 +178,7 @@ export class AppCoordinator {
       titleBar.setFileName(fileManager.currentFileName);
       titleBar.setUnsaved(false);
       statusBar.updateWordCount(content);
+      updateToc();
       markEditorReady();
     }
   };
@@ -477,7 +478,8 @@ export class AppCoordinator {
   });
 
   // -- External file change detection & file tree refresh on window focus --
-  eventManager.on(window, 'focus', async () => {
+  let focusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  const refreshOnFocus = async () => {
     try {
       // Check if current file was modified externally
       if (fileManager.currentPath) {
@@ -494,6 +496,7 @@ export class AppCoordinator {
               titleBar.setFileName(fileManager.currentFileName);
               titleBar.setUnsaved(false);
               statusBar.updateWordCount(content);
+              updateToc();
             }
           } else {
             await fileManager.dismissExternalChange();
@@ -503,7 +506,7 @@ export class AppCoordinator {
 
       // Refresh file tree if a folder is open
       if (fileManager.hasFolderOpen) {
-        const tree = await fileManager.refreshFolder();
+        const tree = await fileManager.refreshFolderTopLevel();
         if (tree) {
           fileTree.render(tree);
           // Re-highlight active file
@@ -516,12 +519,26 @@ export class AppCoordinator {
       console.warn('[file] external change check failed:', err);
       statusBar.showMessage(i18n.t.externalChangeCheckFailed, 'warn');
     }
+  };
+  eventManager.on(window, 'focus', () => {
+    if (focusRefreshTimer) clearTimeout(focusRefreshTimer);
+    focusRefreshTimer = setTimeout(() => {
+      focusRefreshTimer = null;
+      refreshOnFocus().catch((err) => {
+        console.warn('[file] external change check failed:', err);
+        statusBar.showMessage(i18n.t.externalChangeCheckFailed, 'warn');
+      });
+    }, 500);
   });
 
   eventManager.addCleanup(() => {
     if (tocTimer) {
       clearTimeout(tocTimer);
       tocTimer = null;
+    }
+    if (focusRefreshTimer) {
+      clearTimeout(focusRefreshTimer);
+      focusRefreshTimer = null;
     }
     syncManager.stop();
   });

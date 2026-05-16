@@ -16,6 +16,7 @@ export class FileManager {
   private _lastModifiedAt: number | null = null;
   private _openFolderPath: string | null = null;
   private _openFolderName: string | null = null;
+  private _lastFolderTree: FileTreeNode | null = null;
   public onAutoSave?: () => void;
 
   get currentFileName(): string {
@@ -54,7 +55,9 @@ export class FileManager {
       if (!dir) return null;
       this._openFolderPath = dir as string;
       this._openFolderName = this.getBaseName(dir as string);
-      return this.readDirectory(this._openFolderPath, this._openFolderName);
+      const tree = await this.readDirectory(this._openFolderPath, this._openFolderName);
+      this._lastFolderTree = tree;
+      return tree;
     } catch {
       return null;
     }
@@ -64,7 +67,9 @@ export class FileManager {
     try {
       this._openFolderPath = dirPath;
       this._openFolderName = this.getBaseName(dirPath);
-      return this.readDirectory(this._openFolderPath, this._openFolderName);
+      const tree = await this.readDirectory(this._openFolderPath, this._openFolderName);
+      this._lastFolderTree = tree;
+      return tree;
     } catch {
       return null;
     }
@@ -73,10 +78,53 @@ export class FileManager {
   async refreshFolder(): Promise<FileTreeNode | null> {
     if (!this._openFolderPath || !this._openFolderName) return null;
     try {
-      return this.readDirectory(this._openFolderPath, this._openFolderName);
+      const tree = await this.readDirectory(this._openFolderPath, this._openFolderName);
+      this._lastFolderTree = tree;
+      return tree;
     } catch {
       return null;
     }
+  }
+
+  async refreshFolderTopLevel(): Promise<FileTreeNode | null> {
+    if (!this._openFolderPath || !this._openFolderName) return null;
+    try {
+      const tree = await this.readDirectoryTopLevel(this._openFolderPath, this._openFolderName);
+      const merged = this.mergeExistingSubtrees(tree, this._lastFolderTree);
+      this._lastFolderTree = merged;
+      return merged;
+    } catch {
+      return null;
+    }
+  }
+
+  private async readDirectoryTopLevel(dirPath: string, name: string): Promise<FileTreeNode> {
+    const children: FileTreeNode[] = [];
+    const existingDirectoryPaths = new Set<string>();
+
+    try {
+      const entries = await readDir(dirPath);
+      for (const entry of entries) {
+        const entryPath = `${dirPath}/${entry.name}`;
+        if (entry.isDirectory) {
+          existingDirectoryPaths.add(entryPath);
+        } else if (entry.name.endsWith('.md') || entry.name.endsWith('.markdown')) {
+          children.push({
+            name: entry.name,
+            path: entryPath,
+            isDir: false,
+          });
+        }
+      }
+    } catch {
+      // Permission denied or read error
+    }
+
+    for (const child of this._lastFolderTree?.children ?? []) {
+      if (child.isDir && existingDirectoryPaths.has(child.path)) children.push(child);
+    }
+
+    return { name, path: dirPath, isDir: true, children: this.sortNodes(children) };
   }
 
   get hasFolderOpen(): boolean {
@@ -112,13 +160,31 @@ export class FileManager {
       // Permission denied or read error
     }
 
-    // Sort: directories first, then files, alphabetically
-    children.sort((a, b) => {
+    return { name, path: dirPath, isDir: true, children: this.sortNodes(children) };
+  }
+
+  private sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {
+    return nodes.sort((a, b) => {
       if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
+  }
 
-    return { name, path: dirPath, isDir: true, children };
+  private mergeExistingSubtrees(next: FileTreeNode, previous: FileTreeNode | null): FileTreeNode {
+    if (!previous?.children || !next.children) return next;
+
+    const previousChildren = new Map(previous.children.map((child) => [child.path, child]));
+    const children = next.children.map((child) => {
+      if (!child.isDir) return child;
+      const previousChild = previousChildren.get(child.path);
+      if (!previousChild?.children) return child;
+      return {
+        ...child,
+        children: previousChild.children,
+      };
+    });
+
+    return { ...next, children };
   }
 
   async openFile(path?: string): Promise<string> {
