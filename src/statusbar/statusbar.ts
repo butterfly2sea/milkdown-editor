@@ -1,4 +1,5 @@
 import { i18n } from '../i18n';
+import type { SyncStatus } from '../app/store';
 
 export type ViewMode = 'wysiwyg' | 'source';
 
@@ -135,7 +136,7 @@ export class StatusBar {
     this.renderCursorPos();
   }
 
-  updateSyncStatus(status: 'idle' | 'syncing' | 'error' | 'disabled'): void {
+  updateSyncStatus(status: SyncStatus): void {
     if (status === 'disabled') {
       this.syncBtn.style.display = 'none';
       return;

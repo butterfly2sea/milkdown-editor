@@ -1,9 +1,9 @@
 import { WebDAVClient } from './webdav-client';
 import { getSyncConfig, getSyncMappings, addSyncMapping, removeSyncMapping, contentHash, type SyncConfig, type SyncMapping } from './sync-config';
 import { readTextFile, writeTextFile, stat } from '@tauri-apps/plugin-fs';
+import type { AppStore, SyncFileStatus, SyncStatus } from '../app/store';
 
-export type SyncStatus = 'idle' | 'syncing' | 'error' | 'disabled';
-export type SyncFileStatus = 'synced' | 'syncing' | 'error';
+export type { SyncFileStatus, SyncStatus };
 
 interface SyncManifestEntry {
   localMtime: number;
@@ -25,12 +25,12 @@ export class SyncManager {
   private _fileStatuses = new Map<string, SyncFileStatus>();
   private uploadLocks = new Map<string, Promise<void>>();
 
-  public onStatusChange?: (status: SyncStatus) => void;
-  public onFileStatusChange?: (statuses: Map<string, SyncFileStatus>) => void;
   /** Called when only the remote changed. Return 'download' to overwrite local, 'ignore' to skip. */
   public onRemoteChanged?: (fileName: string) => Promise<'download' | 'ignore'>;
   /** Called when both sides changed. Receives local and remote content. Return merged content or null to skip. */
   public onConflict?: (fileName: string, localContent: string, remoteContent: string) => Promise<string | null>;
+
+  constructor(private store: AppStore) {}
 
   get status(): SyncStatus { return this._status; }
   get fileStatuses(): Map<string, SyncFileStatus> { return this._fileStatuses; }
@@ -61,6 +61,7 @@ export class SyncManager {
   restart(): void {
     this.stop();
     this._fileStatuses.clear();
+    this.notifyFileStatusChange();
     this.init();
   }
 
@@ -352,7 +353,7 @@ export class SyncManager {
 
   private setStatus(status: SyncStatus): void {
     this._status = status;
-    this.onStatusChange?.(status);
+    this.store.set('syncStatus', status);
   }
 
   private setFileStatus(localPath: string, status: SyncFileStatus): void {
@@ -361,6 +362,6 @@ export class SyncManager {
   }
 
   private notifyFileStatusChange(): void {
-    this.onFileStatusChange?.(this._fileStatuses);
+    this.store.set('syncFileStatuses', new Map(this._fileStatuses));
   }
 }
