@@ -2187,7 +2187,7 @@ dependencies = [
 
 [[package]]
 name = "milkdown-editor"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "open",
  "serde",
