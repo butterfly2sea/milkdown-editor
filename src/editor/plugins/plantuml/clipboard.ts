@@ -1,4 +1,5 @@
 import { i18n } from '../../../i18n';
+import { toast } from '../../../ui/toast';
 import { EventManager } from '../../../utils/event-manager';
 
 let activeMenuCleanup: (() => void) | null = null;
@@ -57,23 +58,7 @@ async function copyPng(svgEl: SVGElement): Promise<void> {
 }
 
 function showCopyError(): void {
-  const toast = document.createElement('div');
-  toast.textContent = i18n.t.plantumlCopyFailed;
-  toast.style.cssText = `
-    position: fixed;
-    left: 50%;
-    bottom: 24px;
-    transform: translateX(-50%);
-    padding: 8px 12px;
-    border-radius: 6px;
-    background: #e53e3e;
-    color: #fff;
-    font-size: 13px;
-    z-index: 2500;
-    box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,0.1));
-  `;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  toast(i18n.t.plantumlCopyFailed, 'error');
 }
 
 export function closePlantUMLCopyMenu(): void {

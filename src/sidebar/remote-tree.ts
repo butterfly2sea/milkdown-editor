@@ -1,6 +1,7 @@
 import type { RemoteFileInfo } from '../sync/webdav-client';
 import { WebDAVClient } from '../sync/webdav-client';
 import { i18n } from '../i18n';
+import { toast } from '../ui/toast';
 
 export class RemoteFileTree {
   private el: HTMLElement;
@@ -23,7 +24,8 @@ export class RemoteFileTree {
 
   async refresh(): Promise<void> {
     if (!this.client) {
-      this.showMessage('Configure WebDAV in Settings');
+      this.showMessage(i18n.t.webdavNotConfigured);
+      toast(i18n.t.webdavNotConfigured, 'warn');
       return;
     }
     this.el.innerHTML = '';
@@ -52,10 +54,12 @@ export class RemoteFileTree {
         this.renderItem(file, container, depth);
       }
       if (files.length === 0) {
-        this.showMessage('(empty)', container);
+        this.showMessage(i18n.t.empty, container);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load';
+      const msg = err instanceof Error ? err.message : i18n.t.loadRemoteFailed;
+      console.error('[remote-tree] load directory failed:', err);
+      toast(i18n.t.loadRemoteFailed, 'error');
       this.showMessage(msg, container);
     }
   }

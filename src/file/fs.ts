@@ -16,9 +16,14 @@ export class FileManager {
   private _openFolderPath: string | null = null;
   private _openFolderName: string | null = null;
   private _lastFolderTree: FileTreeNode | null = null;
+  private _lastError: unknown = null;
   public onAutoSave?: () => void;
 
   constructor(private store: AppStore) {}
+
+  get lastError(): unknown {
+    return this._lastError;
+  }
 
   setBaseContent(content: string): void {
     this._lastSavedContent = content;
@@ -29,6 +34,7 @@ export class FileManager {
   }
 
   async openFolder(): Promise<FileTreeNode | null> {
+    this._lastError = null;
     try {
       const dir = await open({
         multiple: false,
@@ -41,42 +47,49 @@ export class FileManager {
       const tree = await this.readDirectory(this._openFolderPath, this._openFolderName);
       this._lastFolderTree = tree;
       return tree;
-    } catch {
+    } catch (err) {
+      this._lastError = err;
       return null;
     }
   }
 
   async openFolderByPath(dirPath: string): Promise<FileTreeNode | null> {
+    this._lastError = null;
     try {
       this._openFolderPath = dirPath;
       this._openFolderName = this.getBaseName(dirPath);
       const tree = await this.readDirectory(this._openFolderPath, this._openFolderName);
       this._lastFolderTree = tree;
       return tree;
-    } catch {
+    } catch (err) {
+      this._lastError = err;
       return null;
     }
   }
 
   async refreshFolder(): Promise<FileTreeNode | null> {
     if (!this._openFolderPath || !this._openFolderName) return null;
+    this._lastError = null;
     try {
       const tree = await this.readDirectory(this._openFolderPath, this._openFolderName);
       this._lastFolderTree = tree;
       return tree;
-    } catch {
+    } catch (err) {
+      this._lastError = err;
       return null;
     }
   }
 
   async refreshFolderTopLevel(): Promise<FileTreeNode | null> {
     if (!this._openFolderPath || !this._openFolderName) return null;
+    this._lastError = null;
     try {
       const tree = await this.readDirectoryTopLevel(this._openFolderPath, this._openFolderName);
       const merged = this.mergeExistingSubtrees(tree, this._lastFolderTree);
       this._lastFolderTree = merged;
       return merged;
-    } catch {
+    } catch (err) {
+      this._lastError = err;
       return null;
     }
   }
