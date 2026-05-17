@@ -1,5 +1,5 @@
 import type { FileTreeNode } from '../file/fs';
-import type { SyncFileStatus } from '../sync/sync-manager';
+import type { SyncFileStatus } from '../app/store';
 import { i18n } from '../i18n';
 
 export class FileTree {
@@ -188,12 +188,12 @@ export class FileTree {
     }
   }
 
-  setActiveFile(path: string): void {
+  setActiveFile(path: string | null): void {
     this.currentFile = path;
     const items = this.el.querySelectorAll('.file-tree-item');
     items.forEach((item) => {
       const el = item as HTMLElement;
-      if (el.dataset.filepath === path) {
+      if (path && el.dataset.filepath === path) {
         el.style.background = 'var(--accent, #0366d6)';
         el.style.color = '#fff';
       } else {

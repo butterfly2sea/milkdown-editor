@@ -16,6 +16,7 @@ import { showAboutModal } from '../about/about-modal';
 import { MenuEvents, type MenuEvent } from '../types/menu-events';
 import { EventManager } from '../utils/event-manager';
 import { ShortcutManager } from './shortcut-manager';
+import { AppStore } from './store';
 
 const defaultContent = '';
 
@@ -87,16 +88,39 @@ export class AppCoordinator {
   }
 
   // Initialize UI components
+  const appStore = new AppStore();
   const titleBar = new TitleBar(titlebarEl);
   statusBar = new StatusBar(statusbarEl);
   if (pendingStatusWarning) {
     statusBar.showMessage(pendingStatusWarning, 'warn');
   }
-  const fileManager = new FileManager();
+  const fileManager = new FileManager(appStore);
 
   // Initialize sidebar tabs first, then create FileTree inside the files container
   const sidebarTabs = new SidebarTabs(sidebarEl);
   const fileTree = new FileTree(sidebarTabs.filesEl);
+
+  const getCurrentFilePath = () => appStore.get('currentFilePath');
+  const getCurrentFileName = () => {
+    const filePath = getCurrentFilePath();
+    if (!filePath) return i18n.t.untitled;
+    return filePath.replace(/\\/g, '/').split('/').pop() || i18n.t.untitled;
+  };
+  const isUnsaved = () => appStore.get('hasUnsavedChanges');
+
+  eventManager.addCleanup(appStore.subscribe('currentFilePath', (path) => {
+    titleBar.setFileName(getCurrentFileName());
+    fileTree.setActiveFile(path);
+  }));
+  eventManager.addCleanup(appStore.subscribe('hasUnsavedChanges', (hasUnsavedChanges) => {
+    titleBar.setUnsaved(hasUnsavedChanges);
+  }));
+  eventManager.addCleanup(appStore.subscribe('syncStatus', (status) => {
+    statusBar?.updateSyncStatus(status);
+  }));
+  eventManager.addCleanup(appStore.subscribe('syncFileStatuses', (statuses) => {
+    fileTree.updateSyncStatuses(statuses);
+  }));
 
   // Initialize editor (use let + reassign to avoid referencing before init)
   let editorReady = false;
@@ -113,8 +137,7 @@ export class AppCoordinator {
     if (!editorReady) return;
 
     const reallyChanged = fileManager.hasRealChanges(markdown);
-    fileManager.hasUnsavedChanges = reallyChanged;
-    titleBar.setUnsaved(reallyChanged);
+    appStore.set('hasUnsavedChanges', reallyChanged);
     statusBar.updateWordCount(markdown);
 
     if (editorInstance) {
@@ -155,10 +178,10 @@ export class AppCoordinator {
 
   // Auto-save callback
   // Reset initial unsaved state
-  titleBar.setUnsaved(false);
+  appStore.set('hasUnsavedChanges', false);
 
   fileManager.onAutoSave = () => {
-    titleBar.setUnsaved(false);
+    appStore.set('hasUnsavedChanges', false);
   };
 
   // Initial word count
@@ -167,7 +190,7 @@ export class AppCoordinator {
   // -- File operations --
 
   const openFile = async (path?: string) => {
-    if (fileManager.hasUnsavedChanges) {
+    if (isUnsaved()) {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
     const content = await fileManager.openFile(path);
@@ -175,8 +198,6 @@ export class AppCoordinator {
       editorReady = false;  // Suppress onChange during load
       editor.setMarkdown(content);
       root.scrollTop = 0;
-      titleBar.setFileName(fileManager.currentFileName);
-      titleBar.setUnsaved(false);
       statusBar.updateWordCount(content);
       updateToc();
       markEditorReady();
@@ -193,11 +214,10 @@ export class AppCoordinator {
     const md = getContent();
     const success = await fileManager.saveFile(md);
     if (success) {
-      titleBar.setFileName(fileManager.currentFileName);
-      titleBar.setUnsaved(false);
       // Upload to WebDAV after save
-      if (fileManager.currentPath) {
-        syncManager.uploadFile(fileManager.currentPath, md).catch(console.error);
+      const filePath = getCurrentFilePath();
+      if (filePath) {
+        syncManager.uploadFile(filePath, md).catch(console.error);
       }
     }
   };
@@ -206,13 +226,12 @@ export class AppCoordinator {
     const md = getContent();
     const success = await fileManager.saveAs(md);
     if (success) {
-      titleBar.setFileName(fileManager.currentFileName);
-      titleBar.setUnsaved(false);
+      fileTree.setActiveFile(getCurrentFilePath());
     }
   };
 
   const newFile = () => {
-    if (fileManager.hasUnsavedChanges) {
+    if (isUnsaved()) {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
     fileManager.newFile();
@@ -221,8 +240,6 @@ export class AppCoordinator {
     editor.setMarkdown(newContent);
     root.scrollTop = 0;
     fileManager.setBaseContent(newContent);
-    titleBar.setFileName(i18n.t.untitled);
-    titleBar.setUnsaved(false);
     markEditorReady();
   };
 
@@ -255,21 +272,16 @@ export class AppCoordinator {
       const tree = await fileManager.refreshFolder();
       if (tree) {
         fileTree.render(tree);
-        if (fileManager.currentPath) {
-          fileTree.setActiveFile(fileManager.currentPath);
+        const filePath = getCurrentFilePath();
+        if (filePath) {
+          fileTree.setActiveFile(filePath);
         }
       }
     }
   };
 
   // -- WebDAV Sync --
-  const syncManager = new SyncManager();
-  syncManager.onStatusChange = (status) => {
-    statusBar.updateSyncStatus(status);
-  };
-  syncManager.onFileStatusChange = (statuses) => {
-    fileTree.updateSyncStatuses(statuses);
-  };
+  const syncManager = new SyncManager(appStore);
   syncManager.onRemoteChanged = async (fileName) => {
     return confirm(i18n.t.remoteFileUpdated.replace('{file}', fileName))
       ? 'download' : 'ignore';
@@ -436,8 +448,7 @@ export class AppCoordinator {
   // Sync source textarea changes for word count
   eventManager.on(sourceTextarea, 'input', () => {
     const reallyChanged = fileManager.hasRealChanges(sourceTextarea.value);
-    fileManager.hasUnsavedChanges = reallyChanged;
-    titleBar.setUnsaved(reallyChanged);
+    appStore.set('hasUnsavedChanges', reallyChanged);
     statusBar.updateWordCount(sourceTextarea.value);
   });
 
@@ -447,7 +458,7 @@ export class AppCoordinator {
   statusBar.onExport = async (format) => {
     if (format === 'html') {
       const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-      const title = fileManager.currentFileName;
+      const title = getCurrentFileName();
       await exportHTML(getContent(), theme, title);
     }
   };
@@ -475,7 +486,7 @@ export class AppCoordinator {
 
   // Warn before leaving with unsaved changes
   eventManager.on(window, 'beforeunload', (e) => {
-    if (fileManager.hasUnsavedChanges) {
+    if (isUnsaved()) {
       e.preventDefault();
     }
   });
@@ -485,10 +496,11 @@ export class AppCoordinator {
   const refreshOnFocus = async () => {
     try {
       // Check if current file was modified externally
-      if (fileManager.currentPath) {
+      const filePath = getCurrentFilePath();
+      if (filePath) {
         const changed = await fileManager.checkExternalChange();
         if (changed) {
-          const message = fileManager.hasUnsavedChanges
+          const message = isUnsaved()
             ? i18n.t.fileChangedDiscardReload
             : i18n.t.fileChangedReload;
           if (confirm(message)) {
@@ -496,8 +508,6 @@ export class AppCoordinator {
             if (content !== null) {
               editor.setMarkdown(content);
               root.scrollTop = 0;
-              titleBar.setFileName(fileManager.currentFileName);
-              titleBar.setUnsaved(false);
               statusBar.updateWordCount(content);
               updateToc();
             }
@@ -513,8 +523,9 @@ export class AppCoordinator {
         if (tree) {
           fileTree.render(tree);
           // Re-highlight active file
-          if (fileManager.currentPath) {
-            fileTree.setActiveFile(fileManager.currentPath);
+          const refreshedFilePath = getCurrentFilePath();
+          if (refreshedFilePath) {
+            fileTree.setActiveFile(refreshedFilePath);
           }
         }
       }
@@ -567,24 +578,25 @@ export class AppCoordinator {
         [MenuEvents.SAVE_AS]: () => saveAs(),
         [MenuEvents.EXPORT_HTML]: () => {
           const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-          exportHTML(getContent(), theme, fileManager.currentFileName).catch(console.error);
+          exportHTML(getContent(), theme, getCurrentFileName()).catch(console.error);
         },
         [MenuEvents.UNDO]: () => editorUndo(editor.crepe),
         [MenuEvents.REDO]: () => editorRedo(editor.crepe),
         [MenuEvents.FIND]: () => searchBar.show(false),
         [MenuEvents.FIND_REPLACE]: () => searchBar.show(true),
         [MenuEvents.SYNC_FILE]: () => {
-          if (fileManager.currentPath) {
+          if (getCurrentFilePath()) {
             syncManager.sync().catch(console.error);
           }
         },
         [MenuEvents.MARK_SYNC]: () => {
-          if (fileManager.currentPath) {
-            const isSynced = syncManager.fileStatuses.has(fileManager.currentPath);
+          const filePath = getCurrentFilePath();
+          if (filePath) {
+            const isSynced = syncManager.fileStatuses.has(filePath);
             if (isSynced) {
-              syncManager.unmarkSync(fileManager.currentPath);
+              syncManager.unmarkSync(filePath);
             } else {
-              fileTree.onSyncFile?.(fileManager.currentPath);
+              fileTree.onSyncFile?.(filePath);
             }
           }
         },

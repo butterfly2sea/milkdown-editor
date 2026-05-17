@@ -1,5 +1,6 @@
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from '@tauri-apps/plugin-fs';
+import type { AppStore } from '../app/store';
 
 export interface FileTreeNode {
   name: string;
@@ -9,9 +10,7 @@ export interface FileTreeNode {
 }
 
 export class FileManager {
-  private _currentPath: string | null = null;
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  private _hasUnsavedChanges = false;
   private _lastSavedContent: string = '';
   private _lastModifiedAt: number | null = null;
   private _openFolderPath: string | null = null;
@@ -19,23 +18,7 @@ export class FileManager {
   private _lastFolderTree: FileTreeNode | null = null;
   public onAutoSave?: () => void;
 
-  get currentFileName(): string {
-    if (!this._currentPath) return 'Untitled';
-    const parts = this._currentPath.replace(/\\/g, '/').split('/');
-    return parts[parts.length - 1] || 'Untitled';
-  }
-
-  get currentPath(): string | null {
-    return this._currentPath;
-  }
-
-  get hasUnsavedChanges(): boolean {
-    return this._hasUnsavedChanges;
-  }
-
-  set hasUnsavedChanges(v: boolean) {
-    this._hasUnsavedChanges = v;
-  }
+  constructor(private store: AppStore) {}
 
   setBaseContent(content: string): void {
     this._lastSavedContent = content;
@@ -200,10 +183,10 @@ export class FileManager {
         if (!selected) return '';
         path = selected as string;
       }
-      this._currentPath = path;
+      this.setCurrentPath(path);
       const content = await readTextFile(path);
       this._lastSavedContent = content;
-      this._hasUnsavedChanges = false;
+      this.store.set('hasUnsavedChanges', false);
       try {
         const info = await stat(path);
         this._lastModifiedAt = info.mtime?.getTime() ?? null;
@@ -217,15 +200,16 @@ export class FileManager {
   }
 
   async saveFile(content: string): Promise<boolean> {
-    if (!this._currentPath) {
+    const filePath = this.store.get('currentFilePath');
+    if (!filePath) {
       return this.saveAs(content);
     }
     try {
-      await writeTextFile(this._currentPath, content);
+      await writeTextFile(filePath, content);
       this._lastSavedContent = content;
-      this._hasUnsavedChanges = false;
+      this.store.set('hasUnsavedChanges', false);
       try {
-        const info = await stat(this._currentPath);
+        const info = await stat(filePath);
         this._lastModifiedAt = info.mtime?.getTime() ?? null;
       } catch {
         this._lastModifiedAt = null;
@@ -238,17 +222,18 @@ export class FileManager {
 
   async saveAs(content: string): Promise<boolean> {
     try {
+      const filePath = this.store.get('currentFilePath');
       const path = await save({
-        defaultPath: this._currentPath || 'untitled.md',
+        defaultPath: filePath || 'untitled.md',
         filters: [
           { name: 'Markdown', extensions: ['md'] },
         ],
       });
       if (!path) return false;
-      this._currentPath = path;
+      this.setCurrentPath(path);
       await writeTextFile(path, content);
       this._lastSavedContent = content;
-      this._hasUnsavedChanges = false;
+      this.store.set('hasUnsavedChanges', false);
       try {
         const info = await stat(path);
         this._lastModifiedAt = info.mtime?.getTime() ?? null;
@@ -262,16 +247,16 @@ export class FileManager {
   }
 
   newFile(): void {
-    this._currentPath = null;
+    this.setCurrentPath(null);
     this._lastSavedContent = '';
     this._lastModifiedAt = null;
-    this._hasUnsavedChanges = false;
+    this.store.set('hasUnsavedChanges', false);
   }
 
   scheduleAutoSave(content: string): void {
     if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
     this.autoSaveTimer = setTimeout(async () => {
-      if (this._currentPath && this._hasUnsavedChanges) {
+      if (this.store.get('currentFilePath') && this.store.get('hasUnsavedChanges')) {
         const success = await this.saveFile(content);
         if (success) {
           this.onAutoSave?.();
@@ -301,9 +286,10 @@ export class FileManager {
   }
 
   async checkExternalChange(): Promise<boolean> {
-    if (!this._currentPath || this._lastModifiedAt === null) return false;
+    const filePath = this.store.get('currentFilePath');
+    if (!filePath || this._lastModifiedAt === null) return false;
     try {
-      const info = await stat(this._currentPath);
+      const info = await stat(filePath);
       const currentMtime = info.mtime?.getTime() ?? null;
       return currentMtime !== null && currentMtime !== this._lastModifiedAt;
     } catch {
@@ -312,13 +298,14 @@ export class FileManager {
   }
 
   async reloadFile(): Promise<string | null> {
-    if (!this._currentPath) return null;
+    const filePath = this.store.get('currentFilePath');
+    if (!filePath) return null;
     try {
-      const content = await readTextFile(this._currentPath);
-      const info = await stat(this._currentPath);
+      const content = await readTextFile(filePath);
+      const info = await stat(filePath);
       this._lastModifiedAt = info.mtime?.getTime() ?? null;
       this._lastSavedContent = content;
-      this._hasUnsavedChanges = false;
+      this.store.set('hasUnsavedChanges', false);
       return content;
     } catch {
       return null;
@@ -326,9 +313,10 @@ export class FileManager {
   }
 
   async dismissExternalChange(): Promise<void> {
-    if (!this._currentPath) return;
+    const filePath = this.store.get('currentFilePath');
+    if (!filePath) return;
     try {
-      const info = await stat(this._currentPath);
+      const info = await stat(filePath);
       this._lastModifiedAt = info.mtime?.getTime() ?? null;
     } catch {
       // ignore
@@ -338,5 +326,9 @@ export class FileManager {
   private getBaseName(path: string): string {
     const parts = path.replace(/\\/g, '/').split('/');
     return parts[parts.length - 1] || path;
+  }
+
+  private setCurrentPath(path: string | null): void {
+    this.store.set('currentFilePath', path);
   }
 }
