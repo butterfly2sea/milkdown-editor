@@ -2,6 +2,8 @@ import { WebDAVClient } from './webdav-client';
 import { getSyncConfig, getSyncMappings, addSyncMapping, removeSyncMapping, contentHash, type SyncConfig, type SyncMapping } from './sync-config';
 import { readTextFile, writeTextFile, stat } from '@tauri-apps/plugin-fs';
 import type { AppStore, SyncFileStatus, SyncStatus } from '../app/store';
+import { i18n } from '../i18n';
+import { toast } from '../ui/toast';
 
 export type { SyncFileStatus, SyncStatus };
 
@@ -88,6 +90,7 @@ export class SyncManager {
     } catch (err) {
       console.error('[sync] mark+upload failed:', err);
       this.setFileStatus(localPath, 'error');
+      toast(i18n.t.syncUploadFailed, 'error');
     }
   }
 
@@ -138,6 +141,7 @@ export class SyncManager {
     } catch (err) {
       console.error('[sync] upload failed:', err);
       this.setFileStatus(localPath, 'error');
+      toast(i18n.t.syncUploadFailed, 'error');
     }
   }
 
@@ -161,6 +165,7 @@ export class SyncManager {
 
     this.saveManifest();
     this.setStatus(hasError ? 'error' : 'idle');
+    if (hasError) toast(i18n.t.syncFailed, 'error');
   }
 
   async downloadAndMap(remotePath: string, localPath: string): Promise<void> {
@@ -182,6 +187,7 @@ export class SyncManager {
       this.setFileStatus(localPath, 'synced');
     } catch (err) {
       console.error('[sync] download failed:', err);
+      toast(i18n.t.syncDownloadFailed, 'error');
       throw err;
     }
   }

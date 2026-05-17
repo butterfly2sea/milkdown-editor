@@ -1,5 +1,6 @@
 import { WebDAVClient } from './webdav-client';
 import { i18n } from '../i18n';
+import { toast } from '../ui/toast';
 
 export function showRemoteFolderPicker(
   client: WebDAVClient,
@@ -132,7 +133,7 @@ export function showRemoteFolderPicker(
       } catch (e) {
         const errEl = document.createElement('div');
         errEl.style.cssText = 'padding: 8px; font-size: 12px; color: #e53e3e;';
-        errEl.textContent = e instanceof Error ? e.message : 'Failed to load';
+        errEl.textContent = e instanceof Error ? e.message : i18n.t.loadRemoteFailed;
         container.appendChild(errEl);
       }
     };
@@ -148,7 +149,7 @@ export function showRemoteFolderPicker(
       background: transparent; color: var(--text-primary, #333); cursor: pointer;
     `;
     newFolderBtn.addEventListener('click', async () => {
-      const name = prompt('Folder name:');
+      const name = prompt(i18n.t.newFolder);
       if (!name) return;
       const newPath = selectedPath.replace(/\/+$/, '') + '/' + name;
       try {
@@ -156,8 +157,9 @@ export function showRemoteFolderPicker(
         // Refresh
         treeContainer.innerHTML = '';
         await loadDir(rootPath, treeContainer, 0);
-      } catch {
-        alert('Failed to create folder');
+      } catch (err) {
+        console.error('[remote-picker] create folder failed:', err);
+        toast(i18n.t.createFolderFailed, 'error');
       }
     });
     modal.appendChild(newFolderBtn);

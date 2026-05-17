@@ -1,6 +1,7 @@
 import type { FileTreeNode } from '../file/fs';
 import type { SyncFileStatus } from '../app/store';
 import { i18n } from '../i18n';
+import { toast } from '../ui/toast';
 
 export class FileTree {
   private el: HTMLElement;
@@ -225,14 +226,15 @@ export class FileTree {
       {
         label: 'New File',
         action: async () => {
-          const name = prompt('File name:');
+          const name = prompt(i18n.t.fileName);
           if (!name) return;
           const fileName = name.endsWith('.md') ? name : name + '.md';
           try {
             const { writeTextFile } = await import('@tauri-apps/plugin-fs');
             await writeTextFile(`${node.path}/${fileName}`, '');
-          } catch {
-            alert('Failed to create file');
+          } catch (err) {
+            console.error('[file-tree] create file failed:', err);
+            toast(i18n.t.createFailed, 'error');
           }
         },
       },

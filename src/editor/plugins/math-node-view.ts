@@ -1,4 +1,6 @@
 import type { NodeViewConstructor } from '@milkdown/kit/prose/view';
+import { i18n } from '../../i18n';
+import { toast } from '../../ui/toast';
 
 type MathMode = 'visual' | 'source';
 
@@ -44,7 +46,7 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
     const textarea = document.createElement('textarea');
     textarea.className = 'math-source-input';
     textarea.value = currentValue;
-    textarea.placeholder = 'Enter LaTeX...';
+    textarea.placeholder = i18n.t.mathPlaceholder;
     textarea.style.cssText = `
       font-family: monospace;
       font-size: 14px;
@@ -76,7 +78,7 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
     // Toggle button
     const toggleBtn = document.createElement('button');
     toggleBtn.textContent = '</>';
-    toggleBtn.title = 'Toggle LaTeX source';
+    toggleBtn.title = i18n.t.mathToggleSource;
     toggleBtn.className = 'math-toggle-btn';
     toggleBtn.style.cssText = `
       position: absolute;
@@ -137,6 +139,7 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
         mathContainer.appendChild(mathField);
       }).catch((err) => {
         console.error('Failed to load MathLive:', err);
+        toast(i18n.t.mathLoadFailed, 'error');
         mathContainer.textContent = currentValue || '(math)';
       });
     }

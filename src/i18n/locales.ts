@@ -20,6 +20,18 @@ export interface Locale {
   newFile: string;
   newFolder: string;
   createFailed: string;
+  createFolderFailed: string;
+  folderOpenFailed: string;
+  fileTreeRefreshFailed: string;
+  webdavNotConfigured: string;
+  empty: string;
+  loadRemoteFailed: string;
+  syncUploadFailed: string;
+  syncDownloadFailed: string;
+  syncFailed: string;
+  exportFailed: string;
+  mathLoadFailed: string;
+  remoteRefreshFailed: string;
 
   // Sidebar
   newFileMenu: string;
@@ -160,6 +172,18 @@ export const en: Locale = {
   newFile: 'New File',
   newFolder: 'New Folder',
   createFailed: 'Failed to create file',
+  createFolderFailed: 'Failed to create folder',
+  folderOpenFailed: 'Failed to open folder',
+  fileTreeRefreshFailed: 'Failed to refresh files',
+  webdavNotConfigured: 'Configure WebDAV in Settings',
+  empty: '(empty)',
+  loadRemoteFailed: 'Failed to load remote files',
+  syncUploadFailed: 'Failed to upload to WebDAV',
+  syncDownloadFailed: 'Failed to download from WebDAV',
+  syncFailed: 'WebDAV sync failed',
+  exportFailed: 'Export failed',
+  mathLoadFailed: 'Failed to load math editor',
+  remoteRefreshFailed: 'Failed to refresh remote files',
   newFileMenu: 'New File',
   plantumlPlaceholder: 'Enter PlantUML code to preview',
   plantumlPreviewTitle: 'Click to edit, right-click to copy',
@@ -276,6 +300,18 @@ export const zh: Locale = {
   newFile: '新建文件',
   newFolder: '新建文件夹',
   createFailed: '创建文件失败',
+  createFolderFailed: '创建文件夹失败',
+  folderOpenFailed: '打开文件夹失败',
+  fileTreeRefreshFailed: '刷新文件列表失败',
+  webdavNotConfigured: '请先在设置中配置 WebDAV',
+  empty: '空',
+  loadRemoteFailed: '加载远程文件失败',
+  syncUploadFailed: '上传到 WebDAV 失败',
+  syncDownloadFailed: '从 WebDAV 下载失败',
+  syncFailed: 'WebDAV 同步失败',
+  exportFailed: '导出失败',
+  mathLoadFailed: '加载数学公式编辑器失败',
+  remoteRefreshFailed: '刷新远程文件失败',
   newFileMenu: '新建文件',
   plantumlPlaceholder: '输入 PlantUML 代码以预览',
   plantumlPreviewTitle: '点击编辑，右键复制',

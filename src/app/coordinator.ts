@@ -17,6 +17,7 @@ import { MenuEvents, type MenuEvent } from '../types/menu-events';
 import { EventManager } from '../utils/event-manager';
 import { ShortcutManager } from './shortcut-manager';
 import { AppStore } from './store';
+import { toast } from '../ui/toast';
 
 const defaultContent = '';
 
@@ -62,6 +63,7 @@ export class AppCoordinator {
   const showStatusWarning = (message: string) => {
     if (statusBar) {
       statusBar.showMessage(message, 'warn');
+      toast(message, 'warn');
     } else {
       pendingStatusWarning = message;
     }
@@ -93,6 +95,7 @@ export class AppCoordinator {
   statusBar = new StatusBar(statusbarEl);
   if (pendingStatusWarning) {
     statusBar.showMessage(pendingStatusWarning, 'warn');
+    toast(pendingStatusWarning, 'warn');
   }
   const fileManager = new FileManager(appStore);
 
@@ -217,7 +220,10 @@ export class AppCoordinator {
       // Upload to WebDAV after save
       const filePath = getCurrentFilePath();
       if (filePath) {
-        syncManager.uploadFile(filePath, md).catch(console.error);
+        syncManager.uploadFile(filePath, md).catch((err) => {
+          console.error('[sync] upload after save failed:', err);
+          toast(i18n.t.syncUploadFailed, 'error');
+        });
       }
     }
   };
@@ -249,6 +255,9 @@ export class AppCoordinator {
       sidebarEl.classList.add('open');
       fileTree.render(tree);
       sidebarTabs.setActiveTab('files');
+    } else if (fileManager.lastError) {
+      console.error('[file] open folder failed:', fileManager.lastError);
+      toast(i18n.t.folderOpenFailed, 'error');
     }
   };
 
@@ -258,6 +267,9 @@ export class AppCoordinator {
       sidebarEl.classList.add('open');
       fileTree.render(tree);
       sidebarTabs.setActiveTab('files');
+    } else if (fileManager.lastError) {
+      console.error('[file] open folder failed:', fileManager.lastError);
+      toast(i18n.t.folderOpenFailed, 'error');
     }
   };
 
@@ -276,6 +288,9 @@ export class AppCoordinator {
         if (filePath) {
           fileTree.setActiveFile(filePath);
         }
+      } else if (fileManager.lastError) {
+        console.error('[file] refresh tree failed:', fileManager.lastError);
+        toast(i18n.t.fileTreeRefreshFailed, 'error');
       }
     }
   };
@@ -390,7 +405,10 @@ export class AppCoordinator {
   // Refresh remote tree when switching to Remote tab
   sidebarTabs.onTabChange = (tab) => {
     if (tab === 'remote' && syncManager.isConfigured) {
-      remoteTree.refresh().catch(console.error);
+      remoteTree.refresh().catch((err) => {
+        console.error('[remote] refresh failed:', err);
+        toast(i18n.t.remoteRefreshFailed, 'error');
+      });
     }
   };
 
@@ -459,7 +477,12 @@ export class AppCoordinator {
     if (format === 'html') {
       const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
       const title = getCurrentFileName();
-      await exportHTML(getContent(), theme, title);
+      try {
+        await exportHTML(getContent(), theme, title);
+      } catch (err) {
+        console.error('[export] html failed:', err);
+        toast(i18n.t.exportFailed, 'error');
+      }
     }
   };
 
@@ -532,6 +555,7 @@ export class AppCoordinator {
     } catch (err) {
       console.warn('[file] external change check failed:', err);
       statusBar.showMessage(i18n.t.externalChangeCheckFailed, 'warn');
+      toast(i18n.t.externalChangeCheckFailed, 'warn');
     }
   };
   eventManager.on(window, 'focus', () => {
@@ -541,6 +565,7 @@ export class AppCoordinator {
       refreshOnFocus().catch((err) => {
         console.warn('[file] external change check failed:', err);
         statusBar.showMessage(i18n.t.externalChangeCheckFailed, 'warn');
+        toast(i18n.t.externalChangeCheckFailed, 'warn');
       });
     }, 500);
   });
@@ -578,7 +603,10 @@ export class AppCoordinator {
         [MenuEvents.SAVE_AS]: () => saveAs(),
         [MenuEvents.EXPORT_HTML]: () => {
           const theme = (document.documentElement.getAttribute('data-theme') || 'light') as 'light' | 'dark';
-          exportHTML(getContent(), theme, getCurrentFileName()).catch(console.error);
+          exportHTML(getContent(), theme, getCurrentFileName()).catch((err) => {
+            console.error('[export] html failed:', err);
+            toast(i18n.t.exportFailed, 'error');
+          });
         },
         [MenuEvents.UNDO]: () => editorUndo(editor.crepe),
         [MenuEvents.REDO]: () => editorRedo(editor.crepe),
@@ -586,7 +614,10 @@ export class AppCoordinator {
         [MenuEvents.FIND_REPLACE]: () => searchBar.show(true),
         [MenuEvents.SYNC_FILE]: () => {
           if (getCurrentFilePath()) {
-            syncManager.sync().catch(console.error);
+            syncManager.sync().catch((err) => {
+              console.error('[sync] manual sync failed:', err);
+              toast(i18n.t.syncFailed, 'error');
+            });
           }
         },
         [MenuEvents.MARK_SYNC]: () => {
@@ -695,7 +726,10 @@ export class AppCoordinator {
                 openFolderByPath(paths[0]);
                 return;
               }
-            } catch { /* not a directory, try as file */ }
+            } catch (err) {
+              console.warn('[drop] file check failed:', err);
+              toast(i18n.t.dropFileCheckFailed, 'warn');
+            }
             const mdFile = paths.find(
               (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
             );
