@@ -594,7 +594,22 @@ export class AppCoordinator {
 
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
-    eventManager.addAsyncCleanup(import('@tauri-apps/api/event').then(async ({ listen }) => {
+    // Dedupe OS-driven open requests: on macOS cold start the Rust side both
+    // emits "open-file" and stores the path in PendingFile, so the listener
+    // and take_pending_file can race and trigger two openFile calls (which
+    // would also pop two unsaved-changes confirms).
+    let lastOsOpenPath: string | null = null;
+    let lastOsOpenAt = 0;
+    const openFromOs = (path: string, isDir: boolean) => {
+      const now = Date.now();
+      if (path === lastOsOpenPath && now - lastOsOpenAt < 2000) return;
+      lastOsOpenPath = path;
+      lastOsOpenAt = now;
+      if (isDir) openFolderByPath(path);
+      else openFile(path);
+    };
+
+    const listenerSetup = import('@tauri-apps/api/event').then(async ({ listen }) => {
       const menuHandlers: Record<MenuEvent, () => void> = {
         [MenuEvents.NEW]: () => newFile(),
         [MenuEvents.OPEN]: () => openFile(),
@@ -655,13 +670,13 @@ export class AppCoordinator {
       // Listen for file open from OS file association / single-instance
       unlistenPromises.push(listen<string>('open-file', (event) => {
         console.log('[open-file] received:', event.payload);
-        openFile(event.payload);
+        openFromOs(event.payload, false);
       }));
 
       // Listen for folder open from OS right-click / single-instance
       unlistenPromises.push(listen<string>('open-folder-path', (event) => {
         console.log('[open-folder-path] received:', event.payload);
-        openFolderByPath(event.payload);
+        openFromOs(event.payload, true);
       }));
 
       const unlistens = await Promise.all(unlistenPromises);
@@ -670,27 +685,27 @@ export class AppCoordinator {
           unlisten();
         }
       };
-    }));
+    });
 
-    // Check for pending file/folder from OS launch (file association / double-click)
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke<string | null>('take_pending_file').then(async (path) => {
-        if (!path) return;
-        console.log('[pending-path] opening:', path);
-        // Use fs plugin to check if path is a directory
-        try {
-          const { stat } = await import('@tauri-apps/plugin-fs');
-          const info = await stat(path);
-          if (info.isDirectory) {
-            openFolderByPath(path);
-          } else {
-            openFile(path);
-          }
-        } catch {
-          // Fallback: try as file
-          openFile(path);
-        }
-      });
+    eventManager.addAsyncCleanup(listenerSetup);
+
+    // Drain any pending file/folder from OS launch (file association / double-click)
+    // AFTER listeners are registered, so an OS event that races with startup can't
+    // slip past both the live listener and this one-shot poll.
+    listenerSetup.then(async () => {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const path = await invoke<string | null>('take_pending_file');
+      if (!path) return;
+      console.log('[pending-path] opening:', path);
+      // Use fs plugin to check if path is a directory
+      try {
+        const { stat } = await import('@tauri-apps/plugin-fs');
+        const info = await stat(path);
+        openFromOs(path, info.isDirectory);
+      } catch {
+        // Fallback: try as file
+        openFromOs(path, false);
+      }
     });
 
     // Drag-and-drop file support
