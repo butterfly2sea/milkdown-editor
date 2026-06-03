@@ -52,6 +52,17 @@ export interface Locale {
   mathPlaceholder: string;
   mathToggleSource: string;
 
+  // Frontmatter card
+  frontmatterTitle: string;
+  frontmatterUntitled: string;
+  frontmatterName: string;
+  frontmatterDescription: string;
+  frontmatterType: string;
+  frontmatterRaw: string;
+  frontmatterStructured: string;
+  frontmatterCollapse: string;
+  frontmatterInvalidWarn: string;
+
   // Menu (native)
   menuFile: string;
   menuEdit: string;
@@ -197,6 +208,15 @@ export const en: Locale = {
   plantumlDone: 'Done',
   mathPlaceholder: 'Enter LaTeX...',
   mathToggleSource: 'Toggle LaTeX source',
+  frontmatterTitle: 'Frontmatter',
+  frontmatterUntitled: '(no name)',
+  frontmatterName: 'Name',
+  frontmatterDescription: 'Description',
+  frontmatterType: 'Type',
+  frontmatterRaw: 'View YAML',
+  frontmatterStructured: 'View fields',
+  frontmatterCollapse: 'Collapse',
+  frontmatterInvalidWarn: 'YAML contains constructs not editable as fields — use raw mode to edit.',
   menuFile: 'File',
   menuEdit: 'Edit',
   menuView: 'View',
@@ -325,6 +345,15 @@ export const zh: Locale = {
   plantumlDone: '完成',
   mathPlaceholder: '输入 LaTeX...',
   mathToggleSource: '切换 LaTeX 源码',
+  frontmatterTitle: '元信息',
+  frontmatterUntitled: '(未命名)',
+  frontmatterName: '名称',
+  frontmatterDescription: '描述',
+  frontmatterType: '类型',
+  frontmatterRaw: '查看 YAML',
+  frontmatterStructured: '查看字段',
+  frontmatterCollapse: '收起',
+  frontmatterInvalidWarn: 'YAML 中存在无法用表单字段表达的内容，请切到原始 YAML 编辑。',
   menuFile: '文件',
   menuEdit: '编辑',
   menuView: '视图',
