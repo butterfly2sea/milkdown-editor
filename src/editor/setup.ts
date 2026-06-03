@@ -7,6 +7,7 @@ import { Slice } from 'prosemirror-model';
 import { mathPlugins } from './plugins/math-plugin';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
 import { createSearchPlugin } from './search';
+import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -22,18 +23,24 @@ export async function createEditor(
   defaultValue: string,
   onChange?: ChangeCallback,
 ): Promise<EditorInstance> {
+  const frontmatter = createFrontmatterCard();
+  const { yaml: initYaml, body: initBody } = splitFrontmatter(defaultValue);
+  frontmatter.setYaml(initYaml);
+
   const crepe = new Crepe({
     root,
-    defaultValue,
+    defaultValue: initBody,
     features: {
       [CrepeFeature.Latex]: false,
     },
   });
 
+  const compose = () => composeFrontmatter(frontmatter.getYaml(), crepe.getMarkdown());
+
   crepe.editor
     .config((ctx) => {
-      ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
-        onChange?.(markdown);
+      ctx.get(listenerCtx).markdownUpdated(() => {
+        onChange?.(compose());
       });
     })
     .use(listener);
@@ -48,16 +55,18 @@ export async function createEditor(
   crepe.editor.use($prose(() => createSearchPlugin()));
 
   await crepe.create();
+  frontmatter.mount(root);
+  frontmatter.onChange(() => onChange?.(compose()));
 
-  const getMarkdown = (): string => {
-    return crepe.getMarkdown();
-  };
+  const getMarkdown = (): string => compose();
 
   const setMarkdown = (md: string): void => {
+    const { yaml, body } = splitFrontmatter(md);
+    frontmatter.setYaml(yaml);
     crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       const parser = ctx.get(parserCtx);
-      const doc = parser(md);
+      const doc = parser(body);
       if (!doc) return;
       const tr = view.state.tr.replace(
         0, view.state.doc.content.size,
@@ -69,6 +78,7 @@ export async function createEditor(
   };
 
   const destroy = async (): Promise<void> => {
+    frontmatter.destroy();
     await crepe.destroy();
   };
 

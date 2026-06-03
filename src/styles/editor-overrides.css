@@ -262,6 +262,167 @@
   border-color: var(--accent) !important;
 }
 
+/* Frontmatter card — compact summary + expandable form for YAML frontmatter */
+.frontmatter-card {
+  margin: 12px 32px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.frontmatter-card:hover { border-color: var(--border-color); }
+
+.frontmatter-card__compact {
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.frontmatter-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.frontmatter-card__title {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 0 0 auto;
+}
+
+.frontmatter-card__badge {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
+  text-transform: lowercase;
+}
+
+.frontmatter-card__badge[data-type="user"]     { background: rgba(99,102,241,0.12); color: #6366f1; border-color: rgba(99,102,241,0.25); }
+.frontmatter-card__badge[data-type="feedback"] { background: rgba(245,158,11,0.14); color: #b45309; border-color: rgba(245,158,11,0.3); }
+.frontmatter-card__badge[data-type="project"]  { background: rgba(16,185,129,0.12); color: #047857; border-color: rgba(16,185,129,0.25); }
+.frontmatter-card__badge[data-type="reference"]{ background: rgba(139,92,246,0.12); color: #7c3aed; border-color: rgba(139,92,246,0.25); }
+
+.frontmatter-card__chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.frontmatter-card__desc {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.frontmatter-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.frontmatter-card__head-title {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.frontmatter-card__raw-btn,
+.frontmatter-card__collapse-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.frontmatter-card__raw-btn:hover,
+.frontmatter-card__collapse-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.frontmatter-card__collapse-btn { margin-left: auto; padding: 2px 6px; }
+.frontmatter-card__raw-btn { margin-left: auto; }
+.frontmatter-card__head .frontmatter-card__raw-btn + .frontmatter-card__collapse-btn { margin-left: 0; }
+
+.frontmatter-card__body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.frontmatter-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.frontmatter-card__label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.frontmatter-card__input,
+.frontmatter-card__select,
+.frontmatter-card__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 5px 8px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.frontmatter-card__textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+.frontmatter-card__input:focus,
+.frontmatter-card__select:focus,
+.frontmatter-card__textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.18);
+}
+
+.frontmatter-card__warn {
+  padding: 8px 14px;
+  background: rgba(245,158,11,0.08);
+  color: #b45309;
+  font-size: 12px;
+  border-top: 1px solid rgba(245,158,11,0.25);
+}
+
 /* Responsive: auto-hide sidebar on narrow screens */
 @media (max-width: 768px) {
   #sidebar.open {
