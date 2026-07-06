@@ -594,7 +594,7 @@ export class AppCoordinator {
 
   // -- Tauri menu events --
   if ('__TAURI_INTERNALS__' in window) {
-    // Dedupe OS-driven open requests: on macOS cold start the Rust side both
+    // Dedupe OS-driven open requests: on macOS cold start the Rust side can both
     // emits "open-file" and stores the path in PendingFile, so the listener
     // and take_pending_file can race and trigger two openFile calls (which
     // would also pop two unsaved-changes confirms).
@@ -667,13 +667,13 @@ export class AppCoordinator {
         }),
       );
 
-      // Listen for file open from OS file association / single-instance
+      // Listen for file open from OS file association.
       unlistenPromises.push(listen<string>('open-file', (event) => {
         console.log('[open-file] received:', event.payload);
         openFromOs(event.payload, false);
       }));
 
-      // Listen for folder open from OS right-click / single-instance
+      // Listen for folder open from OS integration.
       unlistenPromises.push(listen<string>('open-folder-path', (event) => {
         console.log('[open-folder-path] received:', event.payload);
         openFromOs(event.payload, true);
