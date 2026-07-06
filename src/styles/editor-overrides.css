@@ -45,6 +45,17 @@
 }
 
 /* Table */
+.milkdown .milkdown-table-block .table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.milkdown .milkdown-table-block table.children {
+  width: max-content !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+}
+
 .milkdown table {
   border-collapse: collapse !important;
   border: 1px solid var(--border-color) !important;
@@ -53,6 +64,10 @@
 .milkdown th,
 .milkdown td {
   border: 1px solid var(--border-color) !important;
+  min-width: 96px;
+  max-width: 520px;
+  overflow-wrap: anywhere;
+  vertical-align: top;
   transition: border-color 0.2s;
 }
 

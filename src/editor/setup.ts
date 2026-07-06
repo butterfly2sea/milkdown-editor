@@ -8,6 +8,7 @@ import { mathPlugins } from './plugins/math-plugin';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
 import { createSearchPlugin } from './search';
 import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
+import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -33,6 +34,9 @@ export async function createEditor(
     features: {
       [CrepeFeature.Latex]: false,
     },
+    featureConfigs: {
+      [CrepeFeature.Toolbar]: clipboardToolbarConfig,
+    },
   });
 
   const compose = () => composeFrontmatter(frontmatter.getYaml(), crepe.getMarkdown());
@@ -53,6 +57,7 @@ export async function createEditor(
   // Register search decoration plugin via Milkdown's prose plugin wrapper
   const { $prose } = await import('@milkdown/kit/utils');
   crepe.editor.use($prose(() => createSearchPlugin()));
+  crepe.editor.use($prose(() => createClipboardContextMenuPlugin()));
 
   await crepe.create();
   frontmatter.mount(root);

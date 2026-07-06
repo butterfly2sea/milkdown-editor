@@ -79,13 +79,13 @@ export class AppCoordinator {
       showStatusWarning(i18n.t.tauriFeatureUnavailable);
     });
 
-    // Prevent WebView native context menu (Reload, Inspect, etc.)
-    // Custom context menus use stopPropagation + their own preventDefault
+    // Prevent WebView native context menu (Reload, Inspect, etc.).
+    // Custom context menus use stopPropagation + their own preventDefault.
     eventManager.on(document, 'contextmenu', (e) => {
-      // Allow custom context menus on file tree items (they handle their own preventDefault)
-      if (!(e.target as HTMLElement).closest('.ctx-menu')) {
-        e.preventDefault();
-      }
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest('.ctx-menu, .plantuml-ctx-menu')) return;
+
+      e.preventDefault();
     });
   }
 
