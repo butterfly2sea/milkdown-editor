@@ -256,19 +256,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            // When another instance is launched with a file/folder path, forward to the existing window
-            for arg in args.iter().skip(1) {
-                if is_openable_path(arg) {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let event = if std::path::Path::new(arg).is_dir() { "open-folder-path" } else { "open-file" };
-                        let _ = window.emit(event, arg.to_string());
-                        let _ = window.set_focus();
-                    }
-                    break;
-                }
-            }
-        }))
         .invoke_handler(tauri::generate_handler![update_menu, open_url, take_pending_file])
         .setup(|app| {
             // Clear stale WebView cache after version upgrade
