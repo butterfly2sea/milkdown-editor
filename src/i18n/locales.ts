@@ -47,6 +47,12 @@ export interface Locale {
   plantumlCopyPNG: string;
   plantumlCopyFailed: string;
   plantumlDone: string;
+  mermaidPlaceholder: string;
+  mermaidPreviewTitle: string;
+  mermaidSourcePlaceholder: string;
+  mermaidRendering: string;
+  mermaidSyntaxHint: string;
+  mermaidDone: string;
 
   // Math
   mathPlaceholder: string;
@@ -206,6 +212,12 @@ export const en: Locale = {
   plantumlCopyPNG: 'Copy as PNG',
   plantumlCopyFailed: 'Failed to copy PlantUML image',
   plantumlDone: 'Done',
+  mermaidPlaceholder: 'Enter Mermaid code to preview',
+  mermaidPreviewTitle: 'Click to edit, right-click to copy',
+  mermaidSourcePlaceholder: 'graph TD\n  A[Start] --> B[End]',
+  mermaidRendering: 'Rendering...',
+  mermaidSyntaxHint: 'Check the Mermaid diagram syntax',
+  mermaidDone: 'Done',
   mathPlaceholder: 'Enter LaTeX...',
   mathToggleSource: 'Toggle LaTeX source',
   frontmatterTitle: 'Frontmatter',
@@ -343,6 +355,12 @@ export const zh: Locale = {
   plantumlCopyPNG: '复制为 PNG',
   plantumlCopyFailed: '复制 PlantUML 图片失败',
   plantumlDone: '完成',
+  mermaidPlaceholder: '输入 Mermaid 代码以预览',
+  mermaidPreviewTitle: '点击编辑，右键复制',
+  mermaidSourcePlaceholder: 'graph TD\n  A[开始] --> B[结束]',
+  mermaidRendering: '渲染中...',
+  mermaidSyntaxHint: '请检查 Mermaid 图表语法',
+  mermaidDone: '完成',
   mathPlaceholder: '输入 LaTeX...',
   mathToggleSource: '切换 LaTeX 源码',
   frontmatterTitle: '元信息',

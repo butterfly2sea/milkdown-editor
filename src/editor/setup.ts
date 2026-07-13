@@ -6,6 +6,7 @@ import { TextSelection } from 'prosemirror-state';
 import { Slice } from 'prosemirror-model';
 import { mathPlugins } from './plugins/math-plugin';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
+import { mermaidPlugins } from './plugins/mermaid-plugin';
 import { createSearchPlugin } from './search';
 import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
@@ -50,7 +51,7 @@ export async function createEditor(
     .use(listener);
 
   // Add custom plugins
-  for (const plugin of [...mathPlugins, ...plantumlPlugins]) {
+  for (const plugin of [...mathPlugins, ...plantumlPlugins, ...mermaidPlugins]) {
     crepe.editor.use(plugin);
   }
 

@@ -13,6 +13,10 @@ marked.use({
         const server = getPlantUMLServer();
         return `<div class="plantuml-diagram"><img src="${server}/svg/${encoded}" alt="PlantUML diagram" style="max-width:100%;" /></div>\n`;
       }
+      if (lang === 'mermaid') {
+        // Rendered client-side by mermaid.js injected into the exported document.
+        return `<pre class="mermaid">${escapeHtml(text)}</pre>\n`;
+      }
       let highlighted: string;
       if (lang && hljs.getLanguage(lang)) {
         highlighted = hljs.highlight(text, { language: lang }).value;
@@ -112,6 +116,14 @@ export function buildHTMLDocument(
   hljsCSS: string,
 ): string {
   const isDark = theme === 'dark';
+  const hasMermaid = content.includes('class="mermaid"');
+  const mermaidScript = hasMermaid
+    ? `
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, securityLevel: 'strict', theme: '${isDark ? 'dark' : 'default'}' });
+  </script>`
+    : '';
   const bg = isDark ? '#1e1e1e' : '#ffffff';
   const text = isDark ? '#d4d4d4' : '#24292e';
   const textSecondary = isDark ? '#a0a0a0' : '#586069';
@@ -211,6 +223,8 @@ export function buildHTMLDocument(
     img, svg { max-width: 100%; height: auto; }
     /* PlantUML */
     .plantuml-diagram { text-align: center; margin: 1em 0; }
+    /* Mermaid */
+    pre.mermaid { background: none; padding: 0; text-align: center; margin: 1em 0; overflow: visible; }
     /* Math (preserved as-is) */
     .math-inline, .math-block { font-family: 'KaTeX_Main', 'Times New Roman', serif; }
     /* Definition lists */
@@ -235,7 +249,7 @@ export function buildHTMLDocument(
   </style>
 </head>
 <body>
-${content}
+${content}${mermaidScript}
 </body>
 </html>`;
 }

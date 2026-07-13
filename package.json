@@ -1,6 +1,6 @@
 {
   "name": "milkdown-editor",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -24,6 +24,7 @@
     "highlight.js": "^11.11.1",
     "marked": "^17.0.5",
     "mathlive": "^0.105.0",
+    "mermaid": "^11.16.0",
     "plantuml-encoder": "^1.4.0"
   },
   "devDependencies": {
