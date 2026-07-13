@@ -124,10 +124,41 @@ export class StatusBar {
   }
 
   updateWordCount(markdown: string): void {
-    const text = markdown.replace(/[#*`~\[\]()>|_\-=+]/g, '').trim();
-    this._lastWordCount = text ? text.split(/\s+/).length : 0;
-    this._lastCharCount = text.length;
+    const text = StatusBar.stripMarkdown(markdown);
+    this._lastWordCount = StatusBar.countWords(text);
+    this._lastCharCount = StatusBar.countChars(text);
     this.renderWordCount();
+  }
+
+  // Matches CJK ideographs, Japanese kana and Korean syllables — each counts as one "word".
+  private static readonly CJK_RE =
+    /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯ｦ-ﾟ]/gu;
+
+  /** Strip markdown syntax to an approximate plain-text representation for counting. */
+  private static stripMarkdown(md: string): string {
+    return md
+      .replace(/```[\s\S]*?```/g, ' ')          // fenced code blocks
+      .replace(/~~~[\s\S]*?~~~/g, ' ')
+      .replace(/`[^`]*`/g, ' ')                  // inline code
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')     // images -> drop
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')   // links -> keep text
+      .replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')  // reference links -> keep text
+      .replace(/<[^>]+>/g, ' ')                  // html tags
+      .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '') // heading/quote/list markers
+      .replace(/[*_~|]/g, ' ');                  // emphasis/strikethrough/table pipes
+  }
+
+  /** CJK characters count individually; runs of non-CJK text count as whitespace-separated words. */
+  private static countWords(text: string): number {
+    const cjk = (text.match(StatusBar.CJK_RE) || []).length;
+    const rest = text.replace(StatusBar.CJK_RE, ' ').trim();
+    const words = rest ? rest.split(/\s+/).length : 0;
+    return cjk + words;
+  }
+
+  /** Count characters of the plain text, excluding whitespace. */
+  private static countChars(text: string): number {
+    return [...text.replace(/\s+/g, '')].length;
   }
 
   updateCursorPosition(line: number, col: number): void {
