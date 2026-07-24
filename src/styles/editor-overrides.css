@@ -83,6 +83,21 @@
   transition: background-color 0.2s;
 }
 
+/* Highlight (==text==) — single fixed color, theme-aware.
+   box-decoration-break keeps padding/rounding intact when a highlight wraps. */
+.milkdown mark {
+  background: var(--highlight-bg, #ffe600);
+  color: inherit;
+  border-radius: 3px;
+  padding: 2px 5px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+:root[data-theme="dark"] .milkdown mark {
+  background: #ffd21a;
+  color: #1a1a1a;
+}
+
 /* Links */
 .milkdown a {
   color: var(--accent) !important;

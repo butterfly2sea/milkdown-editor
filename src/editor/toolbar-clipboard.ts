@@ -1,8 +1,9 @@
 import type { Ctx } from '@milkdown/kit/ctx';
 import type { ToolbarFeatureConfig } from '@milkdown/crepe/feature/toolbar';
 import type { EditorView } from '@milkdown/kit/prose/view';
-import { editorViewCtx } from '@milkdown/kit/core';
+import { commandsCtx, editorViewCtx } from '@milkdown/kit/core';
 import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
+import { highlightSchema, toggleHighlightCommand } from './plugins/highlight-plugin';
 
 const copyIcon = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
@@ -21,6 +22,21 @@ const pasteIcon = `
   <path d="M320-800q0-33 23.5-56.5T400-880h160q33 0 56.5 23.5T640-800h80q33 0 56.5 23.5T800-720v560q0 33-23.5 56.5T720-80H240q-33 0-56.5-23.5T160-160v-560q0-33 23.5-56.5T240-800h80Zm80 80h160v-80H400v80ZM240-160h480v-560h-80v80H320v-80h-80v560Zm120-160h240v-80H360v80Zm0-160h240v-80H360v80Z" />
 </svg>
 `;
+
+const highlightIcon = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
+  <path d="M80 0v-160h800V0H80Zm140-280h44l340-340-44-44-340 340v44Zm-60 60v-128l406-408q11-11 25.5-17t30.5-6q16 0 31 6t26 18l42 44q12 11 17.5 26t5.5 30q0 15-5.5 29.5T765-582L360-176H160Zm586-490-42-44 42 44ZM624-560l-22-22-44-44 66 66Z" />
+</svg>
+`;
+
+function isHighlightActive(ctx: Ctx): boolean {
+  const view = ctx.get(editorViewCtx);
+  const { state } = view;
+  const type = highlightSchema.type(ctx);
+  const { from, to, empty, $from } = state.selection;
+  if (empty) return !!type.isInSet(state.storedMarks || $from.marks());
+  return state.doc.rangeHasMark(from, to, type);
+}
 
 function selectedText(ctx: Ctx): string {
   const view = ctx.get(editorViewCtx);
@@ -83,6 +99,13 @@ async function pasteSelection(ctx: Ctx): Promise<void> {
 
 export const clipboardToolbarConfig: ToolbarFeatureConfig = {
   buildToolbar: (builder) => {
+    builder
+      .addGroup('format', 'Format')
+      .addItem('highlight', {
+        icon: highlightIcon,
+        active: isHighlightActive,
+        onRun: (ctx: Ctx) => ctx.get(commandsCtx).call(toggleHighlightCommand.key),
+      });
     builder
       .addGroup('clipboard', 'Clipboard')
       .addItem('copy', {
