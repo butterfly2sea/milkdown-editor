@@ -12,6 +12,13 @@
   color: inherit !important;
 }
 
+/* Use the native caret everywhere. Crepe's self-drawn virtual cursor does not
+   follow CSS `zoom` (it renders at the wrong spot when zoomed) and looks
+   different from the native caret (grey vs. text-colored). Hiding it keeps the
+   caret consistent and correctly positioned at every zoom level. */
+.milkdown .prosemirror-virtual-cursor { display: none !important; }
+.milkdown .ProseMirror { caret-color: auto !important; }
+
 /* Headings */
 .milkdown h1,
 .milkdown h2,

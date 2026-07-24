@@ -9,6 +9,7 @@ export class StatusBar {
   private rightEl: HTMLDivElement;
   private wordCountEl: HTMLSpanElement;
   private cursorPosEl: HTMLSpanElement;
+  private zoomEl: HTMLSpanElement;
   private themeBtn: HTMLButtonElement;
   private exportBtn: HTMLButtonElement;
   private modeBtn: HTMLButtonElement;
@@ -68,10 +69,12 @@ export class StatusBar {
 
     this.wordCountEl = document.createElement('span');
     this.cursorPosEl = document.createElement('span');
+    this.zoomEl = document.createElement('span');
 
     this.leftEl.appendChild(this.modeBtn);
     this.leftEl.appendChild(this.wordCountEl);
     this.leftEl.appendChild(this.cursorPosEl);
+    this.leftEl.appendChild(this.zoomEl);
 
     // Language button
     this.langBtn = document.createElement('button');
@@ -159,6 +162,11 @@ export class StatusBar {
   /** Count characters of the plain text, excluding whitespace. */
   private static countChars(text: string): number {
     return [...text.replace(/\s+/g, '')].length;
+  }
+
+  /** Show the current zoom percentage; hidden at 100% to reduce clutter. */
+  updateZoom(percent: number): void {
+    this.zoomEl.textContent = percent === 100 ? '' : `${percent}%`;
   }
 
   updateCursorPosition(line: number, col: number): void {

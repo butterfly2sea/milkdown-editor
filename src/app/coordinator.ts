@@ -1,5 +1,6 @@
 import { createEditor, getCursorInfo, editorUndo, editorRedo, getHeadings, scrollToPos } from '../editor/setup';
 import { SearchBar } from '../editor/search';
+import { ZoomController } from '../editor/zoom';
 import { SidebarTabs } from '../sidebar/sidebar-tabs';
 import { TableOfContents } from '../sidebar/toc';
 import { RemoteFileTree } from '../sidebar/remote-tree';
@@ -357,6 +358,15 @@ export class AppCoordinator {
   const searchBar = new SearchBar(root);
   searchBar.setEditor(editor.crepe);
 
+  // -- Zoom (editor content only) --
+  const zoom = new ZoomController(root, (pct) => statusBar?.updateZoom(pct));
+  eventManager.on(root, 'wheel', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (e.deltaY < 0) zoom.zoomIn();
+    else zoom.zoomOut();
+  }, { passive: false });
+
   // -- TOC --
   const toc = new TableOfContents(sidebarTabs.tocEl);
   toc.onHeadingClick = (pos) => {
@@ -503,6 +513,9 @@ export class AppCoordinator {
     },
     find: () => searchBar.show(false),
     findReplace: () => searchBar.show(true),
+    zoomIn: () => zoom.zoomIn(),
+    zoomOut: () => zoom.zoomOut(),
+    zoomReset: () => zoom.reset(),
   });
   shortcutManager.init();
   eventManager.addCleanup(() => shortcutManager.dispose());

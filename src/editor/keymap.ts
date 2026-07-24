@@ -8,6 +8,9 @@ export interface KeymapHandlers {
   exportMenu?: () => void;
   find?: () => void;
   findReplace?: () => void;
+  zoomIn?: () => void;
+  zoomOut?: () => void;
+  zoomReset?: () => void;
 }
 
 export function registerKeymap(handlers: KeymapHandlers): () => void {
@@ -41,6 +44,15 @@ export function registerKeymap(handlers: KeymapHandlers): () => void {
     } else if (ctrl && e.key === 'h') {
       e.preventDefault();
       handlers.findReplace?.();
+    } else if (ctrl && e.key === ']') {
+      e.preventDefault();
+      handlers.zoomIn?.();
+    } else if (ctrl && e.key === '[') {
+      e.preventDefault();
+      handlers.zoomOut?.();
+    } else if (ctrl && e.key === '0') {
+      e.preventDefault();
+      handlers.zoomReset?.();
     }
   };
 
