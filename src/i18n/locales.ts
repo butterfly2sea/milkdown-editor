@@ -114,6 +114,9 @@ export interface Locale {
   searchRegex: string;
   searchCaseSensitive: string;
   searchWholeWord: string;
+  localizeSaveFirst: string;
+  localizeDone: string;
+  localizeFailed: string;
 
   // About
   menuAbout: string;
@@ -268,6 +271,9 @@ export const en: Locale = {
   searchRegex: 'Use Regular Expression',
   searchCaseSensitive: 'Match Case',
   searchWholeWord: 'Match Whole Word',
+  localizeSaveFirst: 'Save the file first to localize images',
+  localizeDone: 'Localized {n} image(s), {f} failed',
+  localizeFailed: 'Image localization failed',
   menuAbout: 'About',
   aboutTitle: 'About Milkdown Editor',
   aboutDescription: 'A modern WYSIWYG Markdown editor',
@@ -414,6 +420,9 @@ export const zh: Locale = {
   searchRegex: '使用正则表达式',
   searchCaseSensitive: '区分大小写',
   searchWholeWord: '全词匹配',
+  localizeSaveFirst: '请先保存文件再本地化图片',
+  localizeDone: '已本地化 {n} 张图片，失败 {f} 张',
+  localizeFailed: '图片本地化失败',
   menuAbout: '关于',
   aboutTitle: '关于 Milkdown 编辑器',
   aboutDescription: '一个现代的所见即所得 Markdown 编辑器',

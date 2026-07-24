@@ -11,6 +11,7 @@ import { highlightPlugins } from './plugins/highlight-plugin';
 import { createSearchPlugin } from './search';
 import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
+import { buildImageBlockConfig } from './image-localize';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -25,6 +26,7 @@ export async function createEditor(
   root: HTMLElement,
   defaultValue: string,
   onChange?: ChangeCallback,
+  getCurrentFilePath: () => string | null = () => null,
 ): Promise<EditorInstance> {
   const frontmatter = createFrontmatterCard();
   const { yaml: initYaml, body: initBody } = splitFrontmatter(defaultValue);
@@ -38,6 +40,7 @@ export async function createEditor(
     },
     featureConfigs: {
       [CrepeFeature.Toolbar]: clipboardToolbarConfig,
+      [CrepeFeature.ImageBlock]: buildImageBlockConfig(getCurrentFilePath),
     },
   });
 

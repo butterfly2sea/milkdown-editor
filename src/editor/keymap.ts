@@ -11,6 +11,7 @@ export interface KeymapHandlers {
   zoomIn?: () => void;
   zoomOut?: () => void;
   zoomReset?: () => void;
+  localizeImages?: () => void;
 }
 
 export function registerKeymap(handlers: KeymapHandlers): () => void {
@@ -53,6 +54,9 @@ export function registerKeymap(handlers: KeymapHandlers): () => void {
     } else if (ctrl && e.key === '0') {
       e.preventDefault();
       handlers.zoomReset?.();
+    } else if (ctrl && e.altKey && e.code === 'KeyI') {
+      e.preventDefault();
+      handlers.localizeImages?.();
     }
   };
 

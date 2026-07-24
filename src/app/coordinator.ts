@@ -156,7 +156,7 @@ export class AppCoordinator {
 
     // Notify content change listeners (e.g., TOC update)
     onContentChange?.();
-  });
+  }, getCurrentFilePath);
   editorInstance = editor;
   // Expose for testing/debugging
   (window as any).__editor = editor;
@@ -496,6 +496,25 @@ export class AppCoordinator {
     }
   };
 
+  // -- Localize images (copy remote / absolute images into <md>.assets) --
+  const localizeImages = async () => {
+    if (!('__TAURI_INTERNALS__' in window) || !getCurrentFilePath()) {
+      toast(i18n.t.localizeSaveFirst, 'warn');
+      return;
+    }
+    try {
+      const { localizeAllImages } = await import('../editor/image-localize');
+      const r = await localizeAllImages(editor.crepe, getCurrentFilePath);
+      const msg = i18n.t.localizeDone
+        .replace('{n}', String(r.converted))
+        .replace('{f}', String(r.failed));
+      toast(msg, r.failed ? 'warn' : 'info');
+    } catch (err) {
+      console.error('[image] localize all failed:', err);
+      toast(i18n.t.localizeFailed, 'error');
+    }
+  };
+
   // -- Keyboard shortcuts --
 
   const shortcutManager = new ShortcutManager({
@@ -516,6 +535,7 @@ export class AppCoordinator {
     zoomIn: () => zoom.zoomIn(),
     zoomOut: () => zoom.zoomOut(),
     zoomReset: () => zoom.reset(),
+    localizeImages,
   });
   shortcutManager.init();
   eventManager.addCleanup(() => shortcutManager.dispose());

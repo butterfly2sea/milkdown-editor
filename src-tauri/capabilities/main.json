@@ -50,6 +50,14 @@
       "allow": [{ "path": "**" }]
     },
     {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
       "identifier": "http:default",
       "allow": [
         { "url": "https://*" },
