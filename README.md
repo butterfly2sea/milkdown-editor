@@ -14,6 +14,14 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Table Editing** — Interactive table creation and editing
 
+* **Find & Replace** — Regex, case-sensitive, and whole-word search with capture-group replacement
+
+* **Highlight** — `==highlight==` marks, toggled from the selection toolbar (pure Markdown, no HTML)
+
+* **Editor Zoom** — Zoom the editing area with `Ctrl`+scroll or `Ctrl`+`]` / `[` / `0`
+
+* **Local Images** — Paste or drop images to copy them into a `<name>.assets/` folder with relative links
+
 * **File Management** — Open files/folders, save, auto-save (2s debounce)
 
 * **Export** — Export to HTML (with embedded styles) or PDF (via print)
@@ -25,6 +33,33 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 * **i18n** — English and Chinese, auto-detects system language, extensible
 
 * **Cross-platform** — Windows, macOS, Linux (x86\_64 & ARM64)
+
+## Usage
+
+### Keyboard Shortcuts
+
+| Action                  | Shortcut                                       |
+| ----------------------- | ---------------------------------------------- |
+| Save / Save As          | `Ctrl+S` / `Ctrl+Shift+S`                      |
+| Open / New file         | `Ctrl+O` / `Ctrl+N`                            |
+| Find / Replace          | `Ctrl+F` / `Ctrl+H`                            |
+| Zoom in / out / reset   | `Ctrl+]` / `Ctrl+[` / `Ctrl+0` (or `Ctrl`+scroll) |
+| Localize images         | `Ctrl+Alt+I`                                   |
+| Toggle sidebar / theme  | `Ctrl+\` / `Ctrl+/`                            |
+| Export menu             | `Ctrl+Shift+E`                                 |
+
+### Highlight
+
+Type `==text==`, or select text and click the highlight button in the selection toolbar. It round-trips as pure Markdown (`==text==`) — no HTML is written to the file.
+
+### Image Localization
+
+Save the document first — the asset folder is derived from its path. Then:
+
+* **Paste or drop an image** into the editor → it is copied into `<filename>.assets/` next to the document and inserted with a relative path (`![](<filename>.assets/img-….png)`).
+* **Localize existing images** — click the image button in the status bar (or press `Ctrl+Alt+I`) to download remote images and copy absolute-path images into the assets folder, rewriting them as relative links.
+
+Images render through Tauri's asset protocol while the Markdown on disk stays relative and portable. (Requires the desktop app.)
 
 ## Screenshots
 
