@@ -5,19 +5,39 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { i18n } from '../i18n';
 
+interface SearchOptions {
+  regex: boolean;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+}
+
 interface SearchMatch {
   from: number;
   to: number;
+  groups: string[];
 }
 
-export const searchPluginKey = new PluginKey<{ query: string; currentIndex: number }>('search');
+interface SearchState extends SearchOptions {
+  query: string;
+  currentIndex: number;
+}
+
+const DEFAULT_STATE: SearchState = {
+  query: '',
+  currentIndex: -1,
+  regex: false,
+  caseSensitive: false,
+  wholeWord: false,
+};
+
+export const searchPluginKey = new PluginKey<SearchState>('search');
 
 export function createSearchPlugin(): Plugin {
   return new Plugin({
     key: searchPluginKey,
     state: {
       init() {
-        return { query: '', currentIndex: -1 };
+        return { ...DEFAULT_STATE };
       },
       apply(tr, prev) {
         const meta = tr.getMeta(searchPluginKey);
@@ -27,13 +47,13 @@ export function createSearchPlugin(): Plugin {
     },
     props: {
       decorations(state) {
-        const { query, currentIndex } = searchPluginKey.getState(state) ?? { query: '', currentIndex: -1 };
-        if (!query) return DecorationSet.empty;
+        const s = searchPluginKey.getState(state) ?? DEFAULT_STATE;
+        if (!s.query) return DecorationSet.empty;
 
-        const matches = findMatches(state.doc, query);
+        const matches = findMatches(state.doc, s.query, s);
         const decos: Decoration[] = [];
         matches.forEach((m, i) => {
-          const cls = i === currentIndex ? 'search-highlight-current' : 'search-highlight';
+          const cls = i === s.currentIndex ? 'search-highlight-current' : 'search-highlight';
           decos.push(Decoration.inline(m.from, m.to, { class: cls }));
         });
         return DecorationSet.create(state.doc, decos);
@@ -42,21 +62,54 @@ export function createSearchPlugin(): Plugin {
   });
 }
 
-function findMatches(doc: any, query: string): SearchMatch[] {
-  if (!query) return [];
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Build the RegExp used for both highlighting and match collection. Plain-text
+ *  (non-regex) queries are escaped so they match literally. Returns null for an
+ *  empty query or an invalid user-supplied pattern. */
+function buildSearchRegExp(query: string, opts: SearchOptions): RegExp | null {
+  if (!query) return null;
+  let pattern = opts.regex ? query : escapeRegExp(query);
+  if (opts.wholeWord) pattern = `\\b(?:${pattern})\\b`;
+  const flags = 'g' + (opts.caseSensitive ? '' : 'i');
+  try {
+    return new RegExp(pattern, flags);
+  } catch {
+    return null;
+  }
+}
+
+function findMatches(doc: any, query: string, opts: SearchOptions): SearchMatch[] {
+  const re = buildSearchRegExp(query, opts);
+  if (!re) return [];
   const matches: SearchMatch[] = [];
-  const lowerQuery = query.toLowerCase();
   doc.descendants((node: any, pos: number) => {
-    if (node.isText) {
-      const text = node.text!.toLowerCase();
-      let index = 0;
-      while ((index = text.indexOf(lowerQuery, index)) !== -1) {
-        matches.push({ from: pos + index, to: pos + index + query.length });
-        index += query.length;
+    if (!node.isText) return;
+    const text = node.text as string;
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      // Skip zero-width matches (e.g. `a*`) while keeping lastIndex advancing.
+      if (m[0].length === 0) {
+        re.lastIndex++;
+        continue;
       }
+      matches.push({ from: pos + m.index, to: pos + m.index + m[0].length, groups: m.slice() });
     }
   });
   return matches;
+}
+
+/** Expand `$1`..`$99`, `$&` (whole match) and `$$` in a replacement string
+ *  using the capture groups of a regex match. */
+function expandReplacement(template: string, groups: string[]): string {
+  return template.replace(/\$(\$|&|\d{1,2})/g, (_, token: string) => {
+    if (token === '$') return '$';
+    if (token === '&') return groups[0] ?? '';
+    return groups[Number(token)] ?? '';
+  });
 }
 
 export class SearchBar {
@@ -70,6 +123,12 @@ export class SearchBar {
   private currentIndex = -1;
   private visible = false;
   private showReplace = false;
+  private regexMode = false;
+  private caseSensitive = false;
+  private wholeWord = false;
+  private caseBtn!: HTMLButtonElement;
+  private wordBtn!: HTMLButtonElement;
+  private regexBtn!: HTMLButtonElement;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -78,15 +137,13 @@ export class SearchBar {
       display: none;
       position: absolute;
       top: 0;
-      right: 24px;
+      right: 0;
       z-index: 50;
       background: var(--bg-elevated, #fff);
       border: 1px solid var(--border-color, #e8e8e8);
-      border-top: none;
-      border-radius: 0 0 6px 6px;
+      border-radius: 6px;
       box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,0.1));
       padding: 8px 12px;
-      display: none;
       flex-direction: column;
       gap: 6px;
       min-width: 320px;
@@ -121,15 +178,36 @@ export class SearchBar {
     this.matchCountEl = document.createElement('span');
     this.matchCountEl.style.cssText = 'font-size: 11px; color: var(--text-muted, #999); white-space: nowrap; min-width: 50px; text-align: center;';
 
+    this.caseBtn = this.createToggleBtn('Aa', i18n.t.searchCaseSensitive, () => {
+      this.caseSensitive = !this.caseSensitive;
+      this.syncToggleButtons();
+      this.onSearchChange();
+    });
+    this.wordBtn = this.createToggleBtn('ab', i18n.t.searchWholeWord, () => {
+      this.wholeWord = !this.wholeWord;
+      this.syncToggleButtons();
+      this.onSearchChange();
+    });
+    this.wordBtn.style.textDecoration = 'underline';
+    this.regexBtn = this.createToggleBtn('.*', i18n.t.searchRegex, () => {
+      this.regexMode = !this.regexMode;
+      this.syncToggleButtons();
+      this.onSearchChange();
+    });
+
     const prevBtn = this.createBtn('\u2191', () => this.prev());
     const nextBtn = this.createBtn('\u2193', () => this.next());
     const closeBtn = this.createBtn('\u2715', () => this.hide());
 
     searchRow.appendChild(this.searchInput);
+    searchRow.appendChild(this.caseBtn);
+    searchRow.appendChild(this.wordBtn);
+    searchRow.appendChild(this.regexBtn);
     searchRow.appendChild(this.matchCountEl);
     searchRow.appendChild(prevBtn);
     searchRow.appendChild(nextBtn);
     searchRow.appendChild(closeBtn);
+    this.syncToggleButtons();
 
     // Replace row
     this.replaceRow = document.createElement('div');
@@ -169,8 +247,23 @@ export class SearchBar {
       document.head.appendChild(style);
     }
 
+    // Keep the bar pinned to the top-right of the editor viewport. #editor-root
+    // is the scroll container, so an absolutely positioned child would scroll
+    // away with the content. A zero-height `position: sticky` wrapper stays
+    // fixed at the top while the document scrolls beneath it, and the bar
+    // floats out of it as an overlay without shifting the content.
     parent.style.position = 'relative';
-    parent.appendChild(this.el);
+    const sticky = document.createElement('div');
+    sticky.style.cssText = `
+      position: sticky;
+      top: 0;
+      left: 0;
+      height: 0;
+      z-index: 50;
+      overflow: visible;
+    `;
+    sticky.appendChild(this.el);
+    parent.insertBefore(sticky, parent.firstChild);
   }
 
   setEditor(crepe: Crepe): void {
@@ -199,9 +292,18 @@ export class SearchBar {
     return this.visible;
   }
 
+  private get searchOptions(): SearchOptions {
+    return { regex: this.regexMode, caseSensitive: this.caseSensitive, wholeWord: this.wholeWord };
+  }
+
+  private setInvalidRegex(invalid: boolean): void {
+    this.searchInput.style.borderColor = invalid ? '#e5484d' : 'var(--border-color, #e8e8e8)';
+  }
+
   private onSearchChange(): void {
     const query = this.searchInput.value;
     if (!this.crepe || !query) {
+      this.setInvalidRegex(false);
       this.clearHighlights();
       this.matches = [];
       this.currentIndex = -1;
@@ -209,9 +311,20 @@ export class SearchBar {
       return;
     }
 
+    // Invalid regex → flag the input instead of silently reporting no matches.
+    if (this.regexMode && !buildSearchRegExp(query, this.searchOptions)) {
+      this.setInvalidRegex(true);
+      this.clearHighlights();
+      this.matches = [];
+      this.currentIndex = -1;
+      this.matchCountEl.textContent = i18n.t.noMatches;
+      return;
+    }
+    this.setInvalidRegex(false);
+
     this.crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
-      this.matches = findMatches(view.state.doc, query);
+      this.matches = findMatches(view.state.doc, query, this.searchOptions);
       this.currentIndex = this.matches.length > 0 ? 0 : -1;
       this.updateDecorations();
       this.updateMatchCount();
@@ -240,7 +353,9 @@ export class SearchBar {
   private replaceCurrent(): void {
     if (!this.crepe || this.currentIndex < 0 || this.currentIndex >= this.matches.length) return;
     const match = this.matches[this.currentIndex];
-    const replacement = this.replaceInput.value;
+    const replacement = this.regexMode
+      ? expandReplacement(this.replaceInput.value, match.groups)
+      : this.replaceInput.value;
 
     this.crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
@@ -257,7 +372,7 @@ export class SearchBar {
 
   private replaceAllMatches(): void {
     if (!this.crepe || this.matches.length === 0) return;
-    const replacement = this.replaceInput.value;
+    const rawReplacement = this.replaceInput.value;
 
     this.crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
@@ -265,6 +380,7 @@ export class SearchBar {
       let tr = view.state.tr;
       for (let i = this.matches.length - 1; i >= 0; i--) {
         const m = this.matches[i];
+        const replacement = this.regexMode ? expandReplacement(rawReplacement, m.groups) : rawReplacement;
         if (replacement) {
           tr = tr.replaceWith(m.from, m.to, view.state.schema.text(replacement));
         } else {
@@ -284,6 +400,9 @@ export class SearchBar {
       const tr = view.state.tr.setMeta(searchPluginKey, {
         query: this.searchInput.value,
         currentIndex: this.currentIndex,
+        regex: this.regexMode,
+        caseSensitive: this.caseSensitive,
+        wholeWord: this.wholeWord,
       });
       view.dispatch(tr);
     });
@@ -294,7 +413,7 @@ export class SearchBar {
     try {
       this.crepe.editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
-        const tr = view.state.tr.setMeta(searchPluginKey, { query: '', currentIndex: -1 });
+        const tr = view.state.tr.setMeta(searchPluginKey, { ...DEFAULT_STATE });
         view.dispatch(tr);
       });
     } catch { /* editor not ready */ }
@@ -341,5 +460,43 @@ export class SearchBar {
     btn.addEventListener('mouseleave', () => { btn.style.background = 'transparent'; });
     btn.addEventListener('click', onClick);
     return btn;
+  }
+
+  private createToggleBtn(text: string, title: string, onClick: () => void): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.textContent = text;
+    btn.title = title;
+    btn.style.cssText = `
+      border: 1px solid var(--border-color, #e8e8e8);
+      background: transparent;
+      color: var(--text-secondary, #666);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: monospace;
+      padding: 2px 6px;
+      border-radius: 3px;
+      line-height: 1;
+    `;
+    btn.dataset.active = 'false';
+    btn.addEventListener('mouseenter', () => {
+      if (btn.dataset.active === 'false') btn.style.background = 'var(--sidebar-hover, #e8e8e8)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      if (btn.dataset.active === 'false') btn.style.background = 'transparent';
+    });
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  private syncToggleButtons(): void {
+    const apply = (btn: HTMLButtonElement, on: boolean) => {
+      btn.dataset.active = String(on);
+      btn.style.background = on ? 'var(--accent-color, #4a9eff)' : 'transparent';
+      btn.style.color = on ? '#fff' : 'var(--text-secondary, #666)';
+      btn.style.borderColor = on ? 'var(--accent-color, #4a9eff)' : 'var(--border-color, #e8e8e8)';
+    };
+    apply(this.caseBtn, this.caseSensitive);
+    apply(this.wordBtn, this.wholeWord);
+    apply(this.regexBtn, this.regexMode);
   }
 }

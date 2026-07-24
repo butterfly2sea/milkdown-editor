@@ -111,6 +111,9 @@ export interface Locale {
   noMatches: string;
   matchOf: string;
   replaceAll: string;
+  searchRegex: string;
+  searchCaseSensitive: string;
+  searchWholeWord: string;
 
   // About
   menuAbout: string;
@@ -262,6 +265,9 @@ export const en: Locale = {
   noMatches: 'No matches',
   matchOf: 'of',
   replaceAll: 'Replace All',
+  searchRegex: 'Use Regular Expression',
+  searchCaseSensitive: 'Match Case',
+  searchWholeWord: 'Match Whole Word',
   menuAbout: 'About',
   aboutTitle: 'About Milkdown Editor',
   aboutDescription: 'A modern WYSIWYG Markdown editor',
@@ -405,6 +411,9 @@ export const zh: Locale = {
   noMatches: '无匹配',
   matchOf: '/',
   replaceAll: '全部替换',
+  searchRegex: '使用正则表达式',
+  searchCaseSensitive: '区分大小写',
+  searchWholeWord: '全词匹配',
   menuAbout: '关于',
   aboutTitle: '关于 Milkdown 编辑器',
   aboutDescription: '一个现代的所见即所得 Markdown 编辑器',
