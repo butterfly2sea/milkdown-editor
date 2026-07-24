@@ -117,6 +117,7 @@ export interface Locale {
   localizeSaveFirst: string;
   localizeDone: string;
   localizeFailed: string;
+  localizeImages: string;
 
   // About
   menuAbout: string;
@@ -274,6 +275,7 @@ export const en: Locale = {
   localizeSaveFirst: 'Save the file first to localize images',
   localizeDone: 'Localized {n} image(s), {f} failed',
   localizeFailed: 'Image localization failed',
+  localizeImages: 'Localize images',
   menuAbout: 'About',
   aboutTitle: 'About Milkdown Editor',
   aboutDescription: 'A modern WYSIWYG Markdown editor',
@@ -423,6 +425,7 @@ export const zh: Locale = {
   localizeSaveFirst: '请先保存文件再本地化图片',
   localizeDone: '已本地化 {n} 张图片，失败 {f} 张',
   localizeFailed: '图片本地化失败',
+  localizeImages: '本地化图片',
   menuAbout: '关于',
   aboutTitle: '关于 Milkdown 编辑器',
   aboutDescription: '一个现代的所见即所得 Markdown 编辑器',

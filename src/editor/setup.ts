@@ -11,7 +11,7 @@ import { highlightPlugins } from './plugins/highlight-plugin';
 import { createSearchPlugin } from './search';
 import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
-import { buildImageBlockConfig } from './image-localize';
+import { buildImageBlockConfig, createImagePasteDropPlugin } from './image-localize';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -63,6 +63,7 @@ export async function createEditor(
   const { $prose } = await import('@milkdown/kit/utils');
   crepe.editor.use($prose(() => createSearchPlugin()));
   crepe.editor.use($prose(() => createClipboardContextMenuPlugin()));
+  crepe.editor.use($prose(() => createImagePasteDropPlugin(getCurrentFilePath)));
 
   await crepe.create();
   frontmatter.mount(root);

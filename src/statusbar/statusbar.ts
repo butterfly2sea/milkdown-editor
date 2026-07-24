@@ -12,6 +12,7 @@ export class StatusBar {
   private zoomEl: HTMLSpanElement;
   private themeBtn: HTMLButtonElement;
   private exportBtn: HTMLButtonElement;
+  private localizeBtn: HTMLButtonElement;
   private modeBtn: HTMLButtonElement;
   private langBtn: HTMLButtonElement;
   private syncBtn: HTMLButtonElement;
@@ -26,6 +27,7 @@ export class StatusBar {
   public onExport?: (format: 'html' | 'pdf') => void;
   public onViewModeToggle?: (mode: ViewMode) => boolean;
   public onSyncClick?: () => void;
+  public onLocalizeImages?: () => void;
 
   constructor(container: HTMLElement) {
     this.el = container;
@@ -92,6 +94,16 @@ export class StatusBar {
     this.themeBtn.addEventListener('click', () => this.onThemeToggle?.());
     this.applyBtnStyles(this.themeBtn);
 
+    // Localize-images button
+    this.localizeBtn = document.createElement('button');
+    this.localizeBtn.className = 'statusbar-btn';
+    this.localizeBtn.title = i18n.t.localizeImages;
+    this.localizeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Z"/></svg>`;
+    this.localizeBtn.style.display = 'flex';
+    this.localizeBtn.style.alignItems = 'center';
+    this.localizeBtn.addEventListener('click', () => this.onLocalizeImages?.());
+    this.applyBtnStyles(this.localizeBtn);
+
     // Export button
     this.exportBtn = document.createElement('button');
     this.exportBtn.className = 'statusbar-btn';
@@ -112,6 +124,7 @@ export class StatusBar {
     this.rightEl.appendChild(this.syncBtn);
     this.rightEl.appendChild(this.langBtn);
     this.rightEl.appendChild(this.themeBtn);
+    this.rightEl.appendChild(this.localizeBtn);
     this.rightEl.appendChild(this.exportBtn);
 
     this.el.appendChild(this.leftEl);
@@ -218,6 +231,7 @@ export class StatusBar {
   private refreshTexts(): void {
     this.modeBtn.title = i18n.t.sourceMode;
     this.themeBtn.title = i18n.t.toggleTheme;
+    this.localizeBtn.title = i18n.t.localizeImages;
     this.exportBtn.textContent = i18n.t.export;
     this.exportBtn.title = i18n.t.export;
     this.langBtn.textContent = i18n.lang.toUpperCase();

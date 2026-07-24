@@ -514,6 +514,7 @@ export class AppCoordinator {
       toast(i18n.t.localizeFailed, 'error');
     }
   };
+  statusBar.onLocalizeImages = localizeImages;
 
   // -- Keyboard shortcuts --
 
@@ -755,37 +756,74 @@ export class AppCoordinator {
         dropLabel.textContent = i18n.t.dropToOpen;
       });
 
+      const IMAGE_DROP_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i;
       let lastDropTime = 0;
+      // `over` events carry no paths, so remember what `enter` saw.
+      let dragHasImage = false;
       const unlistenDragDrop = await getCurrentWebview().onDragDropEvent(async (event) => {
-        if (event.payload.type === 'enter' || event.payload.type === 'over') {
-          dropOverlay.classList.add('visible');
-        } else if (event.payload.type === 'drop') {
+        const payload = event.payload as typeof event.payload & {
+          paths?: string[];
+          position?: { x: number; y: number };
+        };
+        if (payload.type === 'enter' || payload.type === 'over') {
+          if (payload.type === 'enter') {
+            dragHasImage = payload.paths?.some((p) => IMAGE_DROP_RE.test(p)) ?? false;
+          }
+          // Image files are inserted into the editor, not opened — don't show
+          // the "drop to open" overlay for them.
+          dropOverlay.classList.toggle('visible', !dragHasImage);
+        } else if (payload.type === 'drop') {
+          dragHasImage = false;
           dropOverlay.classList.remove('visible');
           const now = Date.now();
           if (now - lastDropTime < 500) return;
           lastDropTime = now;
-          const paths = event.payload.paths;
-          // Check first path: if it's a directory, open as folder tree
-          if (paths.length > 0) {
+          const paths = payload.paths ?? [];
+          if (paths.length === 0) return;
+
+          // Image files → localize into <md>.assets and insert at the drop point.
+          const images = paths.filter((p) => IMAGE_DROP_RE.test(p));
+          if (images.length > 0) {
+            if (!getCurrentFilePath()) {
+              toast(i18n.t.localizeSaveFirst, 'warn');
+              return;
+            }
             try {
-              const { stat } = await import('@tauri-apps/plugin-fs');
-              const info = await stat(paths[0]);
-              if (info.isDirectory) {
-                openFolderByPath(paths[0]);
-                return;
-              }
+              const { dropLocalImages } = await import('../editor/image-localize');
+              const coords = payload.position
+                ? {
+                    left: payload.position.x / window.devicePixelRatio,
+                    top: payload.position.y / window.devicePixelRatio,
+                  }
+                : undefined;
+              await dropLocalImages(editor.crepe, getCurrentFilePath, images, coords);
             } catch (err) {
-              console.warn('[drop] file check failed:', err);
-              toast(i18n.t.dropFileCheckFailed, 'warn');
+              console.error('[drop] image localize failed:', err);
+              toast(i18n.t.localizeFailed, 'error');
             }
-            const mdFile = paths.find(
-              (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
-            );
-            if (mdFile) {
-              openFile(mdFile);
-            }
+            return;
           }
-        } else if (event.payload.type === 'leave') {
+
+          // Directory → open as folder tree
+          try {
+            const { stat } = await import('@tauri-apps/plugin-fs');
+            const info = await stat(paths[0]);
+            if (info.isDirectory) {
+              openFolderByPath(paths[0]);
+              return;
+            }
+          } catch (err) {
+            console.warn('[drop] file check failed:', err);
+            toast(i18n.t.dropFileCheckFailed, 'warn');
+          }
+          const mdFile = paths.find(
+            (p: string) => p.endsWith('.md') || p.endsWith('.markdown')
+          );
+          if (mdFile) {
+            openFile(mdFile);
+          }
+        } else if (payload.type === 'leave') {
+          dragHasImage = false;
           dropOverlay.classList.remove('visible');
         }
       });

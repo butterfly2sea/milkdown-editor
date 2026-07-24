@@ -1,5 +1,7 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { editorViewCtx } from '@milkdown/kit/core';
+import { TextSelection, Plugin, PluginKey } from '@milkdown/kit/prose/state';
+import type { EditorView } from '@milkdown/kit/prose/view';
 import type { Crepe } from '@milkdown/crepe';
 
 // Image localization.
@@ -167,4 +169,115 @@ export async function localizeAllImages(
   }
 
   return result;
+}
+
+/** Handle OS-level image files dropped onto the window (Tauri intercepts these
+ *  before ProseMirror sees them): copy each into `<md>.assets/` and insert an
+ *  image node at the drop point (or the current selection). Returns the count. */
+export async function dropLocalImages(
+  crepe: Crepe,
+  getPath: () => string | null,
+  absPaths: string[],
+  clientCoords?: { left: number; top: number },
+): Promise<number> {
+  const mdPath = getPath();
+  if (!isTauri() || !mdPath) throw new Error('localize-unavailable');
+  const { readFile } = await import('@tauri-apps/plugin-fs');
+
+  let inserted = 0;
+  for (const abs of absPaths) {
+    try {
+      const bytes = await readFile(abs);
+      const rel = await saveToAssets(mdPath, bytes, extFor(baseName(abs), ''));
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const imageType = view.state.schema.nodes.image;
+        if (!imageType) return;
+        let tr = view.state.tr;
+        if (clientCoords) {
+          const at = view.posAtCoords(clientCoords);
+          if (at) tr = tr.setSelection(TextSelection.near(view.state.doc.resolve(at.pos)));
+        }
+        tr = tr.replaceSelectionWith(imageType.create({ src: rel }), false);
+        view.dispatch(tr.scrollIntoView());
+      });
+      inserted++;
+    } catch (err) {
+      console.error('[image] drop insert failed for', abs, err);
+    }
+  }
+  return inserted;
+}
+
+// -- Paste / in-webview drop of image DATA (Crepe's onUpload only fires from
+//    the image component's upload button, so it does not cover pasting a
+//    screenshot or dropping an image file into the editor). --
+
+function imageFilesFrom(dt: DataTransfer | null): File[] {
+  if (!dt) return [];
+  const out: File[] = [];
+  for (const item of Array.from(dt.items ?? [])) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const f = item.getAsFile();
+      if (f) out.push(f);
+    }
+  }
+  if (!out.length) {
+    for (const f of Array.from(dt.files ?? [])) {
+      if (f.type.startsWith('image/')) out.push(f);
+    }
+  }
+  return out;
+}
+
+async function fileToSrc(file: File, getPath: () => string | null): Promise<string> {
+  const mdPath = getPath();
+  if (isTauri() && mdPath) {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return await saveToAssets(mdPath, bytes, extFor(file.name, file.type));
+    } catch (err) {
+      console.error('[image] paste/drop save failed, using data URL:', err);
+    }
+  }
+  return fileToDataUrl(file);
+}
+
+async function insertImageFiles(
+  view: EditorView,
+  getPath: () => string | null,
+  files: File[],
+  pos?: number,
+): Promise<void> {
+  const imageType = view.state.schema.nodes.image;
+  if (!imageType) return;
+  for (const file of files) {
+    const src = await fileToSrc(file, getPath);
+    const at = pos ?? view.state.selection.from;
+    view.dispatch(view.state.tr.insert(at, imageType.create({ src })).scrollIntoView());
+  }
+}
+
+/** Capture pasted / dropped image data and localize it (Crepe doesn't). */
+export function createImagePasteDropPlugin(getPath: () => string | null): Plugin {
+  return new Plugin({
+    key: new PluginKey('imagePasteDropLocalize'),
+    props: {
+      handlePaste: (view, event) => {
+        const files = imageFilesFrom(event.clipboardData);
+        if (!files.length) return false;
+        event.preventDefault();
+        void insertImageFiles(view, getPath, files);
+        return true;
+      },
+      handleDrop: (view, event) => {
+        const files = imageFilesFrom(event.dataTransfer);
+        if (!files.length) return false;
+        event.preventDefault();
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        void insertImageFiles(view, getPath, files, at?.pos);
+        return true;
+      },
+    },
+  });
 }
