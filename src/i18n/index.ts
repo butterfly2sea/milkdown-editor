@@ -7,6 +7,7 @@ type ChangeListener = (locale: Locale, lang: string) => void;
 class I18n {
   private _lang: string = 'en';
   private _locale: Locale = en;
+  private _imageStorageMode: 'base64' | 'local' | 'url' | 'mixed' = 'local';
   private listeners: ChangeListener[] = [];
 
   get lang(): string {
@@ -58,12 +59,18 @@ class I18n {
     ];
   }
 
+  setImageStorageMode(mode: 'base64' | 'local' | 'url' | 'mixed'): void {
+    this._imageStorageMode = mode;
+    this.syncNativeMenu();
+  }
+
   private syncNativeMenu(): void {
     if (!('__TAURI_INTERNALS__' in window)) return;
 
     import('@tauri-apps/api/core').then(({ invoke }) => {
       console.log('[i18n] syncing native menu to:', this._lang);
       invoke('update_menu', {
+        imageStorageMode: this._imageStorageMode,
         labels: {
           menuFile: this._locale.menuFile,
           menuEdit: this._locale.menuEdit,
@@ -78,6 +85,10 @@ class I18n {
           menuToggleSidebar: this._locale.menuToggleSidebar,
           menuToggleTheme: this._locale.menuToggleTheme,
           menuToggleFullscreen: this._locale.menuToggleFullscreen,
+          menuImageStorage: this._locale.menuImageStorage,
+          menuImageBase64: this._locale.menuImageBase64,
+          menuImageLocal: this._locale.menuImageLocal,
+          menuImageUrl: this._locale.menuImageUrl,
           menuSettings: this._locale.menuSettings,
           menuAbout: this._locale.menuAbout,
           menuUndo: this._locale.menuUndo,

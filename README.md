@@ -24,7 +24,7 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Editor Zoom** — Zoom the editing area with `Ctrl`+scroll or `Ctrl`+`]` / `[` / `0`
 
-* **Local Images** — Paste or drop images to copy them into a `<name>.assets/` folder with relative links
+* **Flexible Image Storage** — Keep images as Base64, online URLs, or relative files in a `<name>.assets/` folder
 
 * **File Management** — Open files/folders, save, auto-save (2s debounce)
 
@@ -81,12 +81,14 @@ Zoom the editing area only — the toolbar and status bar stay at native size:
 
 ### Images
 
-Save the document first — the asset folder is derived from its path. Then:
+Choose a storage mode for each document from **Edit → Image Storage**. Local assets require the document to be saved first; Base64 also works in unsaved documents.
 
-* **Paste or drop an image** into the editor → it is copied into `<filename>.assets/` next to the document and inserted with a relative path (`![](<filename>.assets/img-….png)`). The image can be resized and captioned immediately.
-* **Localize existing images** — click the image button in the status bar (or press `Ctrl+Alt+I`) to download remote images and copy absolute-path images into the assets folder, rewriting them as relative links.
+* **Paste or drop an image** into the editor → it uses the current document's image storage mode and can be resized or captioned immediately.
+* **Change image storage** — use **Edit → Image Storage** to embed images as Base64, copy them into `<filename>.assets/`, or keep existing online URLs. Switching Base64/local modes converts existing references immediately.
+* **Online URL mode** preserves existing web URLs. Pasting a new local image in this mode requires an upload provider, so the editor keeps the document unchanged and shows a warning.
+* **Convert to local assets directly** — press `Ctrl+Alt+I` to download remote images and decode embedded images into the assets folder.
 
-Images render through Tauri's asset protocol while the Markdown on disk stays relative and portable. (Desktop app only.)
+Local images render through Tauri's asset protocol while Markdown keeps portable relative paths. (Desktop app only.)
 
 ### Files
 
