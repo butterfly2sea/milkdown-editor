@@ -42,7 +42,7 @@ export function registerKeymap(handlers: KeymapHandlers): () => void {
     } else if (ctrl && !e.shiftKey && e.key === 'f') {
       e.preventDefault();
       handlers.find?.();
-    } else if (ctrl && e.key === 'h') {
+    } else if (ctrl && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'h') {
       e.preventDefault();
       handlers.findReplace?.();
     } else if (ctrl && e.key === ']') {

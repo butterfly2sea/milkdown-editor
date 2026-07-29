@@ -12,6 +12,7 @@ import { createSearchPlugin } from './search';
 import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
 import { buildImageBlockConfig, createImagePasteDropPlugin } from './image-localize';
+import { formatShortcutPlugin } from './format-shortcuts';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -58,6 +59,7 @@ export async function createEditor(
   for (const plugin of [...mathPlugins, ...plantumlPlugins, ...mermaidPlugins, ...highlightPlugins]) {
     crepe.editor.use(plugin);
   }
+  crepe.editor.use(formatShortcutPlugin);
 
   // Register search decoration plugin via Milkdown's prose plugin wrapper
   const { $prose } = await import('@milkdown/kit/utils');
