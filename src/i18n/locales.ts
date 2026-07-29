@@ -84,6 +84,10 @@ export interface Locale {
   menuToggleSidebar: string;
   menuToggleTheme: string;
   menuToggleFullscreen: string;
+  menuImageStorage: string;
+  menuImageBase64: string;
+  menuImageLocal: string;
+  menuImageUrl: string;
 
   // Settings
   menuSettings: string;
@@ -118,6 +122,11 @@ export interface Locale {
   localizeDone: string;
   localizeFailed: string;
   localizeImages: string;
+  imageStorageConverted: string;
+  imageStorageConverting: string;
+  imageStorageConversionFailed: string;
+  imageStorageUrlUploadRequired: string;
+  imageStorageWysiwygOnly: string;
 
   // About
   menuAbout: string;
@@ -250,6 +259,10 @@ export const en: Locale = {
   menuToggleSidebar: 'Toggle Sidebar',
   menuToggleTheme: 'Toggle Theme',
   menuToggleFullscreen: 'Toggle Fullscreen',
+  menuImageStorage: 'Image Storage',
+  menuImageBase64: 'Embed as Base64',
+  menuImageLocal: 'Local Asset Files',
+  menuImageUrl: 'Online URLs',
   menuSettings: 'Settings...',
   settings: 'Settings',
   plantumlServerUrl: 'PlantUML Server URL',
@@ -276,6 +289,11 @@ export const en: Locale = {
   localizeDone: 'Localized {n} image(s), {f} failed',
   localizeFailed: 'Image localization failed',
   localizeImages: 'Localize images',
+  imageStorageConverted: 'Converted {n} image(s), {f} failed',
+  imageStorageConverting: 'Image conversion is already in progress',
+  imageStorageConversionFailed: 'Image storage conversion failed',
+  imageStorageUrlUploadRequired: 'Converting image files to online URLs requires an upload service',
+  imageStorageWysiwygOnly: 'Switch to WYSIWYG mode before converting images',
   menuAbout: 'About',
   aboutTitle: 'About Milkdown Editor',
   aboutDescription: 'A modern WYSIWYG Markdown editor',
@@ -400,6 +418,10 @@ export const zh: Locale = {
   menuToggleSidebar: '切换侧边栏',
   menuToggleTheme: '切换主题',
   menuToggleFullscreen: '切换全屏',
+  menuImageStorage: '图片存储方式',
+  menuImageBase64: '嵌入 Base64',
+  menuImageLocal: '本地资源文件',
+  menuImageUrl: '在线 URL',
   menuSettings: '设置...',
   settings: '设置',
   plantumlServerUrl: 'PlantUML 服务器地址',
@@ -426,6 +448,11 @@ export const zh: Locale = {
   localizeDone: '已本地化 {n} 张图片，失败 {f} 张',
   localizeFailed: '图片本地化失败',
   localizeImages: '本地化图片',
+  imageStorageConverted: '已转换 {n} 张图片，失败 {f} 张',
+  imageStorageConverting: '图片转换正在进行中',
+  imageStorageConversionFailed: '图片存储方式转换失败',
+  imageStorageUrlUploadRequired: '将图片文件转换为在线 URL 需要配置上传服务',
+  imageStorageWysiwygOnly: '请切换到所见即所得模式后再转换图片',
   menuAbout: '关于',
   aboutTitle: '关于 Milkdown 编辑器',
   aboutDescription: '一个现代的所见即所得 Markdown 编辑器',

@@ -83,8 +83,9 @@ Zoom the editing area only — the toolbar and status bar stay at native size:
 
 Save the document first — the asset folder is derived from its path. Then:
 
-* **Paste or drop an image** into the editor → it is copied into `<filename>.assets/` next to the document and inserted with a relative path (`![](<filename>.assets/img-….png)`).
-* **Localize existing images** — click the image button in the status bar (or press `Ctrl+Alt+I`) to download remote images and copy absolute-path images into the assets folder, rewriting them as relative links.
+* **Paste or drop an image** into the editor → it uses the current document's image storage mode.
+* **Change image storage** — use **Edit → Image Storage** to embed images as Base64, copy them into `<filename>.assets/`, or keep existing online URLs. Switching Base64/local modes converts existing references immediately.
+* **Convert to local assets directly** — press `Ctrl+Alt+I` to download remote images and decode embedded images into the assets folder.
 
 Images render through Tauri's asset protocol while the Markdown on disk stays relative and portable. (Desktop app only.)
 

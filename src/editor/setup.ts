@@ -12,6 +12,7 @@ import { createSearchPlugin } from './search';
 import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './frontmatter';
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
 import { buildImageBlockConfig, createImagePasteDropPlugin } from './image-localize';
+import type { ImageStorageMode } from './image-storage';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -27,6 +28,8 @@ export async function createEditor(
   defaultValue: string,
   onChange?: ChangeCallback,
   getCurrentFilePath: () => string | null = () => null,
+  getImageStorageMode: () => ImageStorageMode = () => 'local',
+  onUrlUploadRequired: () => void = () => undefined,
 ): Promise<EditorInstance> {
   const frontmatter = createFrontmatterCard();
   const { yaml: initYaml, body: initBody } = splitFrontmatter(defaultValue);
@@ -40,7 +43,11 @@ export async function createEditor(
     },
     featureConfigs: {
       [CrepeFeature.Toolbar]: clipboardToolbarConfig,
-      [CrepeFeature.ImageBlock]: buildImageBlockConfig(getCurrentFilePath),
+      [CrepeFeature.ImageBlock]: buildImageBlockConfig(
+        getCurrentFilePath,
+        getImageStorageMode,
+        onUrlUploadRequired,
+      ),
     },
   });
 
@@ -63,7 +70,11 @@ export async function createEditor(
   const { $prose } = await import('@milkdown/kit/utils');
   crepe.editor.use($prose(() => createSearchPlugin()));
   crepe.editor.use($prose(() => createClipboardContextMenuPlugin()));
-  crepe.editor.use($prose(() => createImagePasteDropPlugin(getCurrentFilePath)));
+  crepe.editor.use($prose(() => createImagePasteDropPlugin(
+    getCurrentFilePath,
+    getImageStorageMode,
+    onUrlUploadRequired,
+  )));
 
   await crepe.create();
   frontmatter.mount(root);

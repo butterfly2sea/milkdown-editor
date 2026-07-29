@@ -19,6 +19,12 @@ import { EventManager } from '../utils/event-manager';
 import { ShortcutManager } from './shortcut-manager';
 import { AppStore } from './store';
 import { toast } from '../ui/toast';
+import {
+  convertImageStorage,
+  detectImageStorageState,
+  type ImageStorageMode,
+  type ImageStorageState,
+} from '../editor/image-storage';
 
 const defaultContent = '';
 
@@ -111,6 +117,19 @@ export class AppCoordinator {
     return filePath.replace(/\\/g, '/').split('/').pop() || i18n.t.untitled;
   };
   const isUnsaved = () => appStore.get('hasUnsavedChanges');
+  let imageStorageState: ImageStorageState = 'local';
+  let imageStorageConversionInFlight = false;
+  const imageStorageConversionBusy = () => {
+    if (!imageStorageConversionInFlight) return false;
+    toast(i18n.t.imageStorageConverting, 'info');
+    return true;
+  };
+  const activeImageStorageMode = (): ImageStorageMode =>
+    imageStorageState === 'mixed' ? 'local' : imageStorageState;
+  const updateImageStorageState = (state: ImageStorageState) => {
+    imageStorageState = state;
+    i18n.setImageStorageMode(state);
+  };
 
   eventManager.addCleanup(appStore.subscribe('currentFilePath', (path) => {
     titleBar.setFileName(getCurrentFileName());
@@ -156,7 +175,9 @@ export class AppCoordinator {
 
     // Notify content change listeners (e.g., TOC update)
     onContentChange?.();
-  }, getCurrentFilePath);
+  }, getCurrentFilePath, activeImageStorageMode, () => {
+    toast(i18n.t.imageStorageUrlUploadRequired, 'warn');
+  });
   editorInstance = editor;
   // Expose for testing/debugging
   (window as any).__editor = editor;
@@ -194,6 +215,7 @@ export class AppCoordinator {
   // -- File operations --
 
   const openFile = async (path?: string) => {
+    if (imageStorageConversionBusy()) return;
     if (isUnsaved()) {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
@@ -201,6 +223,7 @@ export class AppCoordinator {
     if (content !== undefined) {
       editorReady = false;  // Suppress onChange during load
       editor.setMarkdown(content);
+      updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
       root.scrollTop = 0;
       statusBar.updateWordCount(content);
       updateToc();
@@ -230,6 +253,7 @@ export class AppCoordinator {
   };
 
   const saveAs = async () => {
+    if (imageStorageConversionBusy()) return;
     const md = getContent();
     const success = await fileManager.saveAs(md);
     if (success) {
@@ -238,6 +262,7 @@ export class AppCoordinator {
   };
 
   const newFile = () => {
+    if (imageStorageConversionBusy()) return;
     if (isUnsaved()) {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
@@ -245,6 +270,7 @@ export class AppCoordinator {
     const newContent = '# Untitled\n\n';
     editorReady = false;  // Suppress onChange during load
     editor.setMarkdown(newContent);
+    updateImageStorageState('local');
     root.scrollTop = 0;
     fileManager.setBaseContent(newContent);
     markEditorReady();
@@ -453,6 +479,7 @@ export class AppCoordinator {
   root.parentElement?.appendChild(sourceTextarea);
 
   statusBar.onViewModeToggle = (mode) => {
+    if (imageStorageConversionBusy()) return false;
     if (!confirm(i18n.t.viewModeUndoWarning)) return false;
 
     const editorDiv = root.querySelector('.milkdown') as HTMLElement || root.firstElementChild as HTMLElement;
@@ -469,6 +496,7 @@ export class AppCoordinator {
       sourceTextarea.style.display = 'none';
       if (editorDiv) editorDiv.style.display = '';
       editor.setMarkdown(md);
+      updateImageStorageState(detectImageStorageState(editor.crepe) ?? imageStorageState);
     }
     return true;
   };
@@ -496,25 +524,45 @@ export class AppCoordinator {
     }
   };
 
-  // -- Localize images (copy remote / absolute images into <md>.assets) --
-  const localizeImages = async () => {
-    if (!('__TAURI_INTERNALS__' in window) || !getCurrentFilePath()) {
-      toast(i18n.t.localizeSaveFirst, 'warn');
+  // -- Per-document image storage --
+  const changeImageStorage = async (target: ImageStorageMode) => {
+    if (statusBar.viewMode === 'source') {
+      toast(i18n.t.imageStorageWysiwygOnly, 'warn');
+      updateImageStorageState(imageStorageState);
       return;
     }
+    const before = detectImageStorageState(editor.crepe);
+    if (target === 'local' && before && before !== 'local' && !getCurrentFilePath()) {
+      toast(i18n.t.localizeSaveFirst, 'warn');
+      updateImageStorageState(before);
+      return;
+    }
+    if (imageStorageConversionInFlight) {
+      toast(i18n.t.imageStorageConverting, 'info');
+      updateImageStorageState(imageStorageState);
+      return;
+    }
+    imageStorageConversionInFlight = true;
     try {
-      const { localizeAllImages } = await import('../editor/image-localize');
-      const r = await localizeAllImages(editor.crepe, getCurrentFilePath);
-      const msg = i18n.t.localizeDone
-        .replace('{n}', String(r.converted))
-        .replace('{f}', String(r.failed));
-      toast(msg, r.failed ? 'warn' : 'info');
+      const result = await convertImageStorage(editor.crepe, getCurrentFilePath, target);
+      const detected = detectImageStorageState(editor.crepe) ?? target;
+      updateImageStorageState(detected);
+      if (result.unsupported > 0) {
+        toast(i18n.t.imageStorageUrlUploadRequired, 'warn');
+        return;
+      }
+      const message = i18n.t.imageStorageConverted
+        .replace('{n}', String(result.converted))
+        .replace('{f}', String(result.failed));
+      toast(message, result.failed ? 'warn' : 'info');
     } catch (err) {
-      console.error('[image] localize all failed:', err);
-      toast(i18n.t.localizeFailed, 'error');
+      console.error('[image] storage conversion failed:', err);
+      updateImageStorageState(imageStorageState);
+      toast(i18n.t.imageStorageConversionFailed, 'error');
+    } finally {
+      imageStorageConversionInFlight = false;
     }
   };
-  statusBar.onLocalizeImages = localizeImages;
 
   // -- Keyboard shortcuts --
 
@@ -536,7 +584,7 @@ export class AppCoordinator {
     zoomIn: () => zoom.zoomIn(),
     zoomOut: () => zoom.zoomOut(),
     zoomReset: () => zoom.reset(),
-    localizeImages,
+    localizeImages: () => changeImageStorage('local'),
   });
   shortcutManager.init();
   eventManager.addCleanup(() => shortcutManager.dispose());
@@ -551,6 +599,7 @@ export class AppCoordinator {
   // -- External file change detection & file tree refresh on window focus --
   let focusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   const refreshOnFocus = async () => {
+    if (imageStorageConversionInFlight) return;
     try {
       // Check if current file was modified externally
       const filePath = getCurrentFilePath();
@@ -564,6 +613,7 @@ export class AppCoordinator {
             const content = await fileManager.reloadFile();
             if (content !== null) {
               editor.setMarkdown(content);
+              updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
               root.scrollTop = 0;
               statusBar.updateWordCount(content);
               updateToc();
@@ -661,6 +711,15 @@ export class AppCoordinator {
         [MenuEvents.REDO]: () => editorRedo(editor.crepe),
         [MenuEvents.FIND]: () => searchBar.show(false),
         [MenuEvents.FIND_REPLACE]: () => searchBar.show(true),
+        [MenuEvents.IMAGE_STORAGE_BASE64]: () => {
+          void changeImageStorage('base64');
+        },
+        [MenuEvents.IMAGE_STORAGE_LOCAL]: () => {
+          void changeImageStorage('local');
+        },
+        [MenuEvents.IMAGE_STORAGE_URL]: () => {
+          void changeImageStorage('url');
+        },
         [MenuEvents.SYNC_FILE]: () => {
           if (getCurrentFilePath()) {
             syncManager.sync().catch((err) => {
@@ -784,7 +843,12 @@ export class AppCoordinator {
           // Image files → localize into <md>.assets and insert at the drop point.
           const images = paths.filter((p) => IMAGE_DROP_RE.test(p));
           if (images.length > 0) {
-            if (!getCurrentFilePath()) {
+            const storageMode = activeImageStorageMode();
+            if (storageMode === 'url') {
+              toast(i18n.t.imageStorageUrlUploadRequired, 'warn');
+              return;
+            }
+            if (storageMode === 'local' && !getCurrentFilePath()) {
               toast(i18n.t.localizeSaveFirst, 'warn');
               return;
             }
@@ -796,7 +860,13 @@ export class AppCoordinator {
                     top: payload.position.y / window.devicePixelRatio,
                   }
                 : undefined;
-              await dropLocalImages(editor.crepe, getCurrentFilePath, images, coords);
+              await dropLocalImages(
+                editor.crepe,
+                getCurrentFilePath,
+                images,
+                coords,
+                storageMode,
+              );
             } catch (err) {
               console.error('[drop] image localize failed:', err);
               toast(i18n.t.localizeFailed, 'error');
