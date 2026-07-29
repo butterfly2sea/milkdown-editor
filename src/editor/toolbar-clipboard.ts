@@ -3,7 +3,33 @@ import type { ToolbarFeatureConfig } from '@milkdown/crepe/feature/toolbar';
 import type { EditorView } from '@milkdown/kit/prose/view';
 import { commandsCtx, editorViewCtx } from '@milkdown/kit/core';
 import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
+import {
+  emphasisSchema,
+  isMarkSelectedCommand,
+  strongSchema,
+  toggleEmphasisCommand,
+  toggleStrongCommand,
+} from '@milkdown/kit/preset/commonmark';
+import {
+  strikethroughSchema,
+  toggleStrikethroughCommand,
+} from '@milkdown/kit/preset/gfm';
 import { highlightSchema, toggleHighlightCommand } from './plugins/highlight-plugin';
+
+const boldIcon = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M8.86 18.63a1.52 1.52 0 0 1-1.52-1.52V6.89a1.52 1.52 0 0 1 1.52-1.52h3.34c2.04 0 4 1.27 4 3.52 0 1.5-.72 2.4-1.71 2.85 1.03.35 2.17 1.4 2.17 3.16 0 2.56-1.88 3.73-4.26 3.73H8.86Zm.63-2h2.83c1.58 0 2.16-.87 2.16-1.91 0-1.05-.59-1.92-2.2-1.92H9.49v3.83Zm0-5.75h2.59c1.22 0 1.98-.7 1.98-1.77 0-1.1-.82-1.76-1.95-1.76H9.49v3.53Z" />
+</svg>`;
+
+const italicIcon = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M6.3 18.63a.9.9 0 1 1 0-1.81h2.91l3.24-9.64H9.54a.9.9 0 1 1 0-1.81h7.34a.9.9 0 1 1 0 1.81h-2.6l-3.24 9.64h2.6a.9.9 0 1 1 0 1.81H6.3Z" />
+</svg>`;
+
+const strikethroughIcon = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M3.25 13.74a.75.75 0 0 1 0-1.5h17.5a.75.75 0 0 1 0 1.5H3.25Zm7.69-3.48V6.63H6.57a1.06 1.06 0 1 1 0-2.13h10.87a1.06 1.06 0 1 1 0 2.13h-4.37v3.63h-2.13Zm0 5.46h2.13v2.72a1.06 1.06 0 1 1-2.13 0v-2.72Z" />
+</svg>`;
 
 const copyIcon = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
@@ -99,12 +125,36 @@ async function pasteSelection(ctx: Ctx): Promise<void> {
 
 export const clipboardToolbarConfig: ToolbarFeatureConfig = {
   buildToolbar: (builder) => {
-    builder
-      .addGroup('format', 'Format')
+    const formatting = builder.getGroup('formatting').clear();
+    formatting
+      .addItem('bold', {
+        icon: boldIcon,
+        active: (ctx: Ctx) => ctx.get(commandsCtx).call(
+          isMarkSelectedCommand.key,
+          strongSchema.type(ctx),
+        ),
+        onRun: (ctx: Ctx) => ctx.get(commandsCtx).call(toggleStrongCommand.key),
+      })
+      .addItem('italic', {
+        icon: italicIcon,
+        active: (ctx: Ctx) => ctx.get(commandsCtx).call(
+          isMarkSelectedCommand.key,
+          emphasisSchema.type(ctx),
+        ),
+        onRun: (ctx: Ctx) => ctx.get(commandsCtx).call(toggleEmphasisCommand.key),
+      })
       .addItem('highlight', {
         icon: highlightIcon,
         active: isHighlightActive,
         onRun: (ctx: Ctx) => ctx.get(commandsCtx).call(toggleHighlightCommand.key),
+      })
+      .addItem('strikethrough', {
+        icon: strikethroughIcon,
+        active: (ctx: Ctx) => ctx.get(commandsCtx).call(
+          isMarkSelectedCommand.key,
+          strikethroughSchema.type(ctx),
+        ),
+        onRun: (ctx: Ctx) => ctx.get(commandsCtx).call(toggleStrikethroughCommand.key),
       });
     builder
       .addGroup('clipboard', 'Clipboard')

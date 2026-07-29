@@ -1,14 +1,17 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { editorViewCtx } from '@milkdown/kit/core';
+import { Fragment, Slice } from '@milkdown/kit/prose/model';
 import { TextSelection, Plugin, PluginKey } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
 import type { Crepe } from '@milkdown/crepe';
+import type { ImageStorageMode } from './image-storage';
+import { bytesToDataUrl, mimeFor } from './image-assets';
 
 // Image localization.
 //
 // Storage/display split, powered by Crepe's ImageBlock feature:
-//   - onUpload (paste / drop): write bytes into `<md-name>.assets/` next to the
-//     current file and return a RELATIVE path — that is what serializes to .md.
+//   - onUpload (paste / drop): encode or write bytes according to the active
+//     document mode and return the source that serializes to Markdown.
 //   - proxyDomURL (display): resolve a stored relative/absolute path to an
 //     absolute one and run it through Tauri's asset protocol so the webview can
 //     actually render a local file (a bare `./x.png` will not load otherwise).
@@ -67,22 +70,29 @@ async function saveToAssets(mdPath: string, bytes: Uint8Array, ext: string): Pro
 
 const isAbsolute = (p: string): boolean => /^([a-zA-Z]:[\\/]|\/)/.test(p);
 
+function insertImageBlocks(view: EditorView, sources: string[], pos?: number): boolean {
+  const imageType = view.state.schema.nodes['image-block'];
+  if (!imageType || sources.length === 0) return false;
+
+  const nodes = sources.map((src) => imageType.create({ src, caption: '', ratio: 1 }));
+  let tr = view.state.tr;
+  if (pos !== undefined) {
+    const safePos = Math.min(Math.max(pos, 0), tr.doc.content.size);
+    tr = tr.setSelection(TextSelection.near(tr.doc.resolve(safePos)));
+  }
+  tr = tr.replaceSelection(new Slice(Fragment.fromArray(nodes), 0, 0));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
 /** Config for Crepe's ImageBlock feature. */
-export function buildImageBlockConfig(getPath: () => string | null) {
+export function buildImageBlockConfig(
+  getPath: () => string | null,
+  getMode: () => ImageStorageMode = () => 'local',
+  onUrlUploadRequired: () => void = () => undefined,
+) {
   const onUpload = async (file: File): Promise<string> => {
-    const mdPath = getPath();
-    if (!isTauri() || !mdPath) {
-      // Unsaved file or web build: keep the image inline as a data URL so
-      // nothing is lost; localizeAllImages can convert it once the file is saved.
-      return fileToDataUrl(file);
-    }
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      return await saveToAssets(mdPath, bytes, extFor(file.name, file.type));
-    } catch (err) {
-      console.error('[image] save failed, falling back to data URL:', err);
-      return fileToDataUrl(file);
-    }
+    return fileToSrc(file, getPath, getMode, onUrlUploadRequired);
   };
 
   const proxyDomURL = (url: string): string => {
@@ -179,34 +189,38 @@ export async function dropLocalImages(
   getPath: () => string | null,
   absPaths: string[],
   clientCoords?: { left: number; top: number },
+  mode: ImageStorageMode = 'local',
 ): Promise<number> {
+  if (mode === 'url') throw new Error('image-upload-required');
   const mdPath = getPath();
-  if (!isTauri() || !mdPath) throw new Error('localize-unavailable');
+  if (!isTauri() || (mode === 'local' && !mdPath)) throw new Error('localize-unavailable');
   const { readFile } = await import('@tauri-apps/plugin-fs');
 
-  let inserted = 0;
+  const sources: string[] = [];
   for (const abs of absPaths) {
     try {
       const bytes = await readFile(abs);
-      const rel = await saveToAssets(mdPath, bytes, extFor(baseName(abs), ''));
-      crepe.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx);
-        const imageType = view.state.schema.nodes.image;
-        if (!imageType) return;
-        let tr = view.state.tr;
-        if (clientCoords) {
-          const at = view.posAtCoords(clientCoords);
-          if (at) tr = tr.setSelection(TextSelection.near(view.state.doc.resolve(at.pos)));
-        }
-        tr = tr.replaceSelectionWith(imageType.create({ src: rel }), false);
-        view.dispatch(tr.scrollIntoView());
-      });
-      inserted++;
+      let src: string;
+      if (mode === 'base64') {
+        src = await bytesToDataUrl(bytes, mimeFor(abs));
+      } else {
+        if (!mdPath) throw new Error('localize-unavailable');
+        src = await saveToAssets(mdPath, bytes, extFor(baseName(abs), ''));
+      }
+      sources.push(src);
     } catch (err) {
       console.error('[image] drop insert failed for', abs, err);
     }
   }
-  return inserted;
+
+  if (sources.length) {
+    crepe.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const at = clientCoords ? view.posAtCoords(clientCoords)?.pos : undefined;
+      insertImageBlocks(view, sources, at);
+    });
+  }
+  return sources.length;
 }
 
 // -- Paste / in-webview drop of image DATA (Crepe's onUpload only fires from
@@ -230,7 +244,18 @@ function imageFilesFrom(dt: DataTransfer | null): File[] {
   return out;
 }
 
-async function fileToSrc(file: File, getPath: () => string | null): Promise<string> {
+async function fileToSrc(
+  file: File,
+  getPath: () => string | null,
+  getMode: () => ImageStorageMode,
+  onUrlUploadRequired: () => void,
+): Promise<string> {
+  const mode = getMode();
+  if (mode === 'base64') return fileToDataUrl(file);
+  if (mode === 'url') {
+    onUrlUploadRequired();
+    throw new Error('image-upload-required');
+  }
   const mdPath = getPath();
   if (isTauri() && mdPath) {
     try {
@@ -246,20 +271,23 @@ async function fileToSrc(file: File, getPath: () => string | null): Promise<stri
 async function insertImageFiles(
   view: EditorView,
   getPath: () => string | null,
+  getMode: () => ImageStorageMode,
+  onUrlUploadRequired: () => void,
   files: File[],
   pos?: number,
 ): Promise<void> {
-  const imageType = view.state.schema.nodes.image;
-  if (!imageType) return;
-  for (const file of files) {
-    const src = await fileToSrc(file, getPath);
-    const at = pos ?? view.state.selection.from;
-    view.dispatch(view.state.tr.insert(at, imageType.create({ src })).scrollIntoView());
-  }
+  const sources = await Promise.all(
+    files.map((file) => fileToSrc(file, getPath, getMode, onUrlUploadRequired)),
+  );
+  insertImageBlocks(view, sources, pos);
 }
 
 /** Capture pasted / dropped image data and localize it (Crepe doesn't). */
-export function createImagePasteDropPlugin(getPath: () => string | null): Plugin {
+export function createImagePasteDropPlugin(
+  getPath: () => string | null,
+  getMode: () => ImageStorageMode = () => 'local',
+  onUrlUploadRequired: () => void = () => undefined,
+): Plugin {
   return new Plugin({
     key: new PluginKey('imagePasteDropLocalize'),
     props: {
@@ -267,7 +295,8 @@ export function createImagePasteDropPlugin(getPath: () => string | null): Plugin
         const files = imageFilesFrom(event.clipboardData);
         if (!files.length) return false;
         event.preventDefault();
-        void insertImageFiles(view, getPath, files);
+        void insertImageFiles(view, getPath, getMode, onUrlUploadRequired, files)
+          .catch((err) => console.warn('[image] paste insert failed:', err));
         return true;
       },
       handleDrop: (view, event) => {
@@ -275,7 +304,8 @@ export function createImagePasteDropPlugin(getPath: () => string | null): Plugin
         if (!files.length) return false;
         event.preventDefault();
         const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
-        void insertImageFiles(view, getPath, files, at?.pos);
+        void insertImageFiles(view, getPath, getMode, onUrlUploadRequired, files, at?.pos)
+          .catch((err) => console.warn('[image] drop insert failed:', err));
         return true;
       },
     },

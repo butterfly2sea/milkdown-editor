@@ -14,6 +14,9 @@ const MENU_UNDO: &str = "menu-undo";
 const MENU_REDO: &str = "menu-redo";
 const MENU_FIND: &str = "menu-find";
 const MENU_FIND_REPLACE: &str = "menu-find-replace";
+const MENU_IMAGE_STORAGE_BASE64: &str = "menu-image-storage-base64";
+const MENU_IMAGE_STORAGE_LOCAL: &str = "menu-image-storage-local";
+const MENU_IMAGE_STORAGE_URL: &str = "menu-image-storage-url";
 const MENU_SYNC_FILE: &str = "menu-sync-file";
 const MENU_MARK_SYNC: &str = "menu-mark-sync";
 const MENU_TOGGLE_SIDEBAR: &str = "menu-toggle-sidebar";
@@ -46,78 +49,113 @@ struct MenuLabels {
     menu_redo: String,
     menu_find: String,
     menu_find_replace: String,
+    menu_image_storage: String,
+    menu_image_base64: String,
+    menu_image_local: String,
+    menu_image_url: String,
     menu_sync_file: String,
     menu_mark_sync: String,
 }
 
-fn build_menu(app: &tauri::AppHandle) -> tauri::menu::Menu<tauri::Wry> {
-    build_menu_with_labels(app, &default_labels())
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    build_menu_with_labels(app, &default_labels(), "local")
 }
 
-fn build_menu_with_labels(app: &tauri::AppHandle, labels: &MenuLabels) -> tauri::menu::Menu<tauri::Wry> {
-    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+fn build_menu_with_labels(
+    app: &tauri::AppHandle,
+    labels: &MenuLabels,
+    image_storage_mode: &str,
+) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{
+        CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
+    };
 
     let file_menu = SubmenuBuilder::new(app, &labels.menu_file)
-        .item(&MenuItemBuilder::with_id("new", &labels.menu_new).accelerator("CmdOrCtrl+N").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("open", &labels.menu_open).accelerator("CmdOrCtrl+O").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("open-folder", &labels.menu_open_folder).build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("new", &labels.menu_new).accelerator("CmdOrCtrl+N").build(app)?)
+        .item(&MenuItemBuilder::with_id("open", &labels.menu_open).accelerator("CmdOrCtrl+O").build(app)?)
+        .item(&MenuItemBuilder::with_id("open-folder", &labels.menu_open_folder).build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("save", &labels.menu_save).accelerator("CmdOrCtrl+S").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("save-as", &labels.menu_save_as).accelerator("CmdOrCtrl+Shift+S").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("save", &labels.menu_save).accelerator("CmdOrCtrl+S").build(app)?)
+        .item(&MenuItemBuilder::with_id("save-as", &labels.menu_save_as).accelerator("CmdOrCtrl+Shift+S").build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("export-html", &labels.menu_export_html).build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("export-html", &labels.menu_export_html).build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("sync-file", &labels.menu_sync_file).build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("mark-sync", &labels.menu_mark_sync).build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("sync-file", &labels.menu_sync_file).build(app)?)
+        .item(&MenuItemBuilder::with_id("mark-sync", &labels.menu_mark_sync).build(app)?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, None).unwrap())
-        .build().unwrap();
+        .item(&PredefinedMenuItem::quit(app, None)?)
+        .build()?;
+
+    let image_storage_menu = SubmenuBuilder::new(app, &labels.menu_image_storage)
+        .item(
+            &CheckMenuItemBuilder::with_id("image-storage-base64", &labels.menu_image_base64)
+                .checked(image_storage_mode == "base64")
+                .build(app)?,
+        )
+        .item(
+            &CheckMenuItemBuilder::with_id("image-storage-local", &labels.menu_image_local)
+                .checked(image_storage_mode == "local")
+                .build(app)?,
+        )
+        .item(
+            &CheckMenuItemBuilder::with_id("image-storage-url", &labels.menu_image_url)
+                .checked(image_storage_mode == "url")
+                .build(app)?,
+        )
+        .build()?;
 
     let edit_menu = SubmenuBuilder::new(app, &labels.menu_edit)
-        .item(&MenuItemBuilder::with_id("undo", &labels.menu_undo).accelerator("CmdOrCtrl+Z").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("redo", &labels.menu_redo).accelerator("CmdOrCtrl+Shift+Z").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("undo", &labels.menu_undo).accelerator("CmdOrCtrl+Z").build(app)?)
+        .item(&MenuItemBuilder::with_id("redo", &labels.menu_redo).accelerator("CmdOrCtrl+Shift+Z").build(app)?)
         .separator()
-        .item(&PredefinedMenuItem::cut(app, None).unwrap())
-        .item(&PredefinedMenuItem::copy(app, None).unwrap())
-        .item(&PredefinedMenuItem::paste(app, None).unwrap())
-        .item(&PredefinedMenuItem::select_all(app, None).unwrap())
+        .item(&PredefinedMenuItem::cut(app, None)?)
+        .item(&PredefinedMenuItem::copy(app, None)?)
+        .item(&PredefinedMenuItem::paste(app, None)?)
+        .item(&PredefinedMenuItem::select_all(app, None)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("find", &labels.menu_find).accelerator("CmdOrCtrl+F").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("find-replace", &labels.menu_find_replace).accelerator("CmdOrCtrl+H").build(app).unwrap())
-        .build().unwrap();
+        .item(&image_storage_menu)
+        .separator()
+        .item(&MenuItemBuilder::with_id("find", &labels.menu_find).accelerator("CmdOrCtrl+F").build(app)?)
+        .item(&MenuItemBuilder::with_id("find-replace", &labels.menu_find_replace).accelerator("CmdOrCtrl+H").build(app)?)
+        .build()?;
 
     let lang_submenu = SubmenuBuilder::new(app, "Language / 语言")
-        .item(&MenuItemBuilder::with_id("lang-en", "English").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("lang-zh", "中文").build(app).unwrap())
-        .build().unwrap();
+        .item(&MenuItemBuilder::with_id("lang-en", "English").build(app)?)
+        .item(&MenuItemBuilder::with_id("lang-zh", "中文").build(app)?)
+        .build()?;
 
     let view_menu = SubmenuBuilder::new(app, &labels.menu_view)
-        .item(&MenuItemBuilder::with_id("toggle-sidebar", &labels.menu_toggle_sidebar).accelerator("CmdOrCtrl+\\").build(app).unwrap())
-        .item(&MenuItemBuilder::with_id("toggle-theme", &labels.menu_toggle_theme).accelerator("CmdOrCtrl+/").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("toggle-sidebar", &labels.menu_toggle_sidebar).accelerator("CmdOrCtrl+\\").build(app)?)
+        .item(&MenuItemBuilder::with_id("toggle-theme", &labels.menu_toggle_theme).accelerator("CmdOrCtrl+/").build(app)?)
         .separator()
-        .item(&MenuItemBuilder::with_id("toggle-fullscreen", &labels.menu_toggle_fullscreen).accelerator("F11").build(app).unwrap())
+        .item(&MenuItemBuilder::with_id("toggle-fullscreen", &labels.menu_toggle_fullscreen).accelerator("F11").build(app)?)
         .separator()
         .item(&lang_submenu)
         .separator()
-        .item(&MenuItemBuilder::with_id("settings", &labels.menu_settings).accelerator("CmdOrCtrl+,").build(app).unwrap())
-        .build().unwrap();
+        .item(&MenuItemBuilder::with_id("settings", &labels.menu_settings).accelerator("CmdOrCtrl+,").build(app)?)
+        .build()?;
 
     let help_menu = SubmenuBuilder::new(app, &labels.menu_help)
-        .item(&MenuItemBuilder::with_id("about", &labels.menu_about).build(app).unwrap())
-        .build().unwrap();
+        .item(&MenuItemBuilder::with_id("about", &labels.menu_about).build(app)?)
+        .build()?;
 
     MenuBuilder::new(app)
         .item(&file_menu)
         .item(&edit_menu)
         .item(&view_menu)
         .item(&help_menu)
-        .build().unwrap()
+        .build()
 }
 
 #[tauri::command]
-fn update_menu(app: tauri::AppHandle, labels: MenuLabels) -> Result<(), String> {
+fn update_menu(
+    app: tauri::AppHandle,
+    labels: MenuLabels,
+    image_storage_mode: String,
+) -> Result<(), String> {
     eprintln!("[menu] update_menu called, file={}", labels.menu_file);
-    let menu = build_menu_with_labels(&app, &labels);
+    let menu = build_menu_with_labels(&app, &labels, &image_storage_mode)
+        .map_err(|e| e.to_string())?;
 
     // Try window first, then app
     if let Some(window) = app.get_webview_window("main") {
@@ -155,6 +193,10 @@ fn default_labels() -> MenuLabels {
         menu_redo: "Redo".into(),
         menu_find: "Find...".into(),
         menu_find_replace: "Find and Replace...".into(),
+        menu_image_storage: "Image Storage".into(),
+        menu_image_base64: "Embed as Base64".into(),
+        menu_image_local: "Local Asset Files".into(),
+        menu_image_url: "Online URLs".into(),
         menu_sync_file: "Sync Current File".into(),
         menu_mark_sync: "Mark for Sync".into(),
     }
@@ -237,6 +279,9 @@ fn menu_event_name(id: &str) -> Option<&'static str> {
         "redo" => Some(MENU_REDO),
         "find" => Some(MENU_FIND),
         "find-replace" => Some(MENU_FIND_REPLACE),
+        "image-storage-base64" => Some(MENU_IMAGE_STORAGE_BASE64),
+        "image-storage-local" => Some(MENU_IMAGE_STORAGE_LOCAL),
+        "image-storage-url" => Some(MENU_IMAGE_STORAGE_URL),
         "sync-file" => Some(MENU_SYNC_FILE),
         "mark-sync" => Some(MENU_MARK_SYNC),
         "toggle-sidebar" => Some(MENU_TOGGLE_SIDEBAR),
@@ -261,7 +306,7 @@ pub fn run() {
             // Clear stale WebView cache after version upgrade
             clear_webview_cache_on_upgrade(app);
 
-            let menu = build_menu(app.handle());
+            let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
 
             // Initialize pending file state
