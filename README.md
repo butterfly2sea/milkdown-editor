@@ -108,6 +108,11 @@ Images render through Tauri's asset protocol while the Markdown on disk stays re
 | Save / Save As          | `Ctrl+S` / `Ctrl+Shift+S`                         |
 | Open / New file         | `Ctrl+O` / `Ctrl+N`                               |
 | Find / Replace          | `Ctrl+F` / `Ctrl+H`                               |
+| Heading 1-6             | `Ctrl+1` ... `Ctrl+6`                             |
+| Convert to body text    | `Ctrl+Alt+0`                                       |
+| Bold / Italic           | `Ctrl+B` / `Ctrl+I`                               |
+| Highlight / Strike      | `Ctrl+Shift+H` / `Ctrl+Shift+X`                   |
+| Inline code / Link      | `Ctrl+Shift+K` / `Ctrl+K`                         |
 | Zoom in / out / reset   | `Ctrl+]` / `Ctrl+[` / `Ctrl+0` (or `Ctrl`+scroll) |
 | Localize images         | `Ctrl+Alt+I`                                      |
 | Toggle sidebar / theme  | `Ctrl+\` / `Ctrl+/`                               |
