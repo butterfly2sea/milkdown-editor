@@ -1,5 +1,6 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { editorViewCtx } from '@milkdown/kit/core';
+import { Fragment, Slice } from '@milkdown/kit/prose/model';
 import { TextSelection, Plugin, PluginKey } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
 import type { Crepe } from '@milkdown/crepe';
@@ -66,6 +67,21 @@ async function saveToAssets(mdPath: string, bytes: Uint8Array, ext: string): Pro
 }
 
 const isAbsolute = (p: string): boolean => /^([a-zA-Z]:[\\/]|\/)/.test(p);
+
+function insertImageBlocks(view: EditorView, sources: string[], pos?: number): boolean {
+  const imageType = view.state.schema.nodes['image-block'];
+  if (!imageType || sources.length === 0) return false;
+
+  const nodes = sources.map((src) => imageType.create({ src, caption: '', ratio: 1 }));
+  let tr = view.state.tr;
+  if (pos !== undefined) {
+    const safePos = Math.min(Math.max(pos, 0), tr.doc.content.size);
+    tr = tr.setSelection(TextSelection.near(tr.doc.resolve(safePos)));
+  }
+  tr = tr.replaceSelection(new Slice(Fragment.fromArray(nodes), 0, 0));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
 
 /** Config for Crepe's ImageBlock feature. */
 export function buildImageBlockConfig(getPath: () => string | null) {
@@ -184,29 +200,24 @@ export async function dropLocalImages(
   if (!isTauri() || !mdPath) throw new Error('localize-unavailable');
   const { readFile } = await import('@tauri-apps/plugin-fs');
 
-  let inserted = 0;
+  const sources: string[] = [];
   for (const abs of absPaths) {
     try {
       const bytes = await readFile(abs);
-      const rel = await saveToAssets(mdPath, bytes, extFor(baseName(abs), ''));
-      crepe.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx);
-        const imageType = view.state.schema.nodes.image;
-        if (!imageType) return;
-        let tr = view.state.tr;
-        if (clientCoords) {
-          const at = view.posAtCoords(clientCoords);
-          if (at) tr = tr.setSelection(TextSelection.near(view.state.doc.resolve(at.pos)));
-        }
-        tr = tr.replaceSelectionWith(imageType.create({ src: rel }), false);
-        view.dispatch(tr.scrollIntoView());
-      });
-      inserted++;
+      sources.push(await saveToAssets(mdPath, bytes, extFor(baseName(abs), '')));
     } catch (err) {
       console.error('[image] drop insert failed for', abs, err);
     }
   }
-  return inserted;
+
+  if (sources.length) {
+    crepe.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const at = clientCoords ? view.posAtCoords(clientCoords)?.pos : undefined;
+      insertImageBlocks(view, sources, at);
+    });
+  }
+  return sources.length;
 }
 
 // -- Paste / in-webview drop of image DATA (Crepe's onUpload only fires from
@@ -249,13 +260,8 @@ async function insertImageFiles(
   files: File[],
   pos?: number,
 ): Promise<void> {
-  const imageType = view.state.schema.nodes.image;
-  if (!imageType) return;
-  for (const file of files) {
-    const src = await fileToSrc(file, getPath);
-    const at = pos ?? view.state.selection.from;
-    view.dispatch(view.state.tr.insert(at, imageType.create({ src })).scrollIntoView());
-  }
+  const sources = await Promise.all(files.map((file) => fileToSrc(file, getPath)));
+  insertImageBlocks(view, sources, pos);
 }
 
 /** Capture pasted / dropped image data and localize it (Crepe doesn't). */

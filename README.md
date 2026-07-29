@@ -83,7 +83,7 @@ Zoom the editing area only — the toolbar and status bar stay at native size:
 
 Save the document first — the asset folder is derived from its path. Then:
 
-* **Paste or drop an image** into the editor → it is copied into `<filename>.assets/` next to the document and inserted with a relative path (`![](<filename>.assets/img-….png)`).
+* **Paste or drop an image** into the editor → it is copied into `<filename>.assets/` next to the document and inserted with a relative path (`![](<filename>.assets/img-….png)`). The image can be resized and captioned immediately.
 * **Localize existing images** — click the image button in the status bar (or press `Ctrl+Alt+I`) to download remote images and copy absolute-path images into the assets folder, rewriting them as relative links.
 
 Images render through Tauri's asset protocol while the Markdown on disk stays relative and portable. (Desktop app only.)
