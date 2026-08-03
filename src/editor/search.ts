@@ -3,19 +3,22 @@ import { editorViewCtx } from '@milkdown/kit/core';
 import { TextSelection } from 'prosemirror-state';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { EditorSelection } from '@codemirror/state';
 import { i18n } from '../i18n';
+import {
+  buildSearchRegExp,
+  expandReplacement,
+  findMatches,
+  findMatchesInText,
+  type SearchMatch,
+  type SearchOptions,
+} from './text-search';
+import { setSearchMatches } from './cm-search-highlight';
+import type { SourceEditor } from './source-editor';
 
-interface SearchOptions {
-  regex: boolean;
-  caseSensitive: boolean;
-  wholeWord: boolean;
-}
-
-interface SearchMatch {
-  from: number;
-  to: number;
-  groups: string[];
-}
+/** Which editor the bar currently drives. Source mode is a CodeMirror view,
+ *  WYSIWYG is the ProseMirror document behind Crepe. */
+export type SearchTarget = 'wysiwyg' | 'source';
 
 interface SearchState extends SearchOptions {
   query: string;
@@ -62,56 +65,6 @@ export function createSearchPlugin(): Plugin {
   });
 }
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Build the RegExp used for both highlighting and match collection. Plain-text
- *  (non-regex) queries are escaped so they match literally. Returns null for an
- *  empty query or an invalid user-supplied pattern. */
-function buildSearchRegExp(query: string, opts: SearchOptions): RegExp | null {
-  if (!query) return null;
-  let pattern = opts.regex ? query : escapeRegExp(query);
-  if (opts.wholeWord) pattern = `\\b(?:${pattern})\\b`;
-  const flags = 'g' + (opts.caseSensitive ? '' : 'i');
-  try {
-    return new RegExp(pattern, flags);
-  } catch {
-    return null;
-  }
-}
-
-function findMatches(doc: any, query: string, opts: SearchOptions): SearchMatch[] {
-  const re = buildSearchRegExp(query, opts);
-  if (!re) return [];
-  const matches: SearchMatch[] = [];
-  doc.descendants((node: any, pos: number) => {
-    if (!node.isText) return;
-    const text = node.text as string;
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
-      // Skip zero-width matches (e.g. `a*`) while keeping lastIndex advancing.
-      if (m[0].length === 0) {
-        re.lastIndex++;
-        continue;
-      }
-      matches.push({ from: pos + m.index, to: pos + m.index + m[0].length, groups: m.slice() });
-    }
-  });
-  return matches;
-}
-
-/** Expand `$1`..`$99`, `$&` (whole match) and `$$` in a replacement string
- *  using the capture groups of a regex match. */
-function expandReplacement(template: string, groups: string[]): string {
-  return template.replace(/\$(\$|&|\d{1,2})/g, (_, token: string) => {
-    if (token === '$') return '$';
-    if (token === '&') return groups[0] ?? '';
-    return groups[Number(token)] ?? '';
-  });
-}
-
 export class SearchBar {
   private el: HTMLElement;
   private searchInput!: HTMLInputElement;
@@ -119,6 +72,8 @@ export class SearchBar {
   private replaceRow!: HTMLElement;
   private matchCountEl!: HTMLSpanElement;
   private crepe: Crepe | null = null;
+  private sourceEditor: SourceEditor | null = null;
+  private target: SearchTarget = 'wysiwyg';
   private matches: SearchMatch[] = [];
   private currentIndex = -1;
   private visible = false;
@@ -270,6 +225,26 @@ export class SearchBar {
     this.crepe = crepe;
   }
 
+  setSourceEditor(sourceEditor: SourceEditor): void {
+    this.sourceEditor = sourceEditor;
+  }
+
+  /** Called when the app toggles between WYSIWYG and source mode. Highlights
+   *  from the previous target are dropped so stale marks cannot linger. */
+  setTarget(target: SearchTarget): void {
+    if (target === this.target) return;
+    this.clearHighlights();
+    this.target = target;
+    this.matches = [];
+    this.currentIndex = -1;
+    this.matchCountEl.textContent = '';
+    if (this.visible) this.onSearchChange();
+  }
+
+  private get hasTarget(): boolean {
+    return this.target === 'source' ? this.sourceEditor !== null : this.crepe !== null;
+  }
+
   show(withReplace = false): void {
     this.visible = true;
     this.showReplace = withReplace;
@@ -302,7 +277,7 @@ export class SearchBar {
 
   private onSearchChange(): void {
     const query = this.searchInput.value;
-    if (!this.crepe || !query) {
+    if (!this.hasTarget || !query) {
       this.setInvalidRegex(false);
       this.clearHighlights();
       this.matches = [];
@@ -322,16 +297,21 @@ export class SearchBar {
     }
     this.setInvalidRegex(false);
 
-    this.crepe.editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      this.matches = findMatches(view.state.doc, query, this.searchOptions);
-      this.currentIndex = this.matches.length > 0 ? 0 : -1;
-      this.updateDecorations();
-      this.updateMatchCount();
-      if (this.currentIndex >= 0) {
-        this.scrollToCurrent();
-      }
-    });
+    if (this.target === 'source') {
+      const view = this.sourceEditor!.view;
+      this.matches = findMatchesInText(view.state.doc.toString(), query, this.searchOptions);
+    } else {
+      this.crepe!.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        this.matches = findMatches(view.state.doc, query, this.searchOptions);
+      });
+    }
+    this.currentIndex = this.matches.length > 0 ? 0 : -1;
+    this.updateDecorations();
+    this.updateMatchCount();
+    if (this.currentIndex >= 0) {
+      this.scrollToCurrent();
+    }
   }
 
   private next(): void {
@@ -351,49 +331,69 @@ export class SearchBar {
   }
 
   private replaceCurrent(): void {
-    if (!this.crepe || this.currentIndex < 0 || this.currentIndex >= this.matches.length) return;
+    if (!this.hasTarget || this.currentIndex < 0 || this.currentIndex >= this.matches.length) return;
     const match = this.matches[this.currentIndex];
     const replacement = this.regexMode
       ? expandReplacement(this.replaceInput.value, match.groups)
       : this.replaceInput.value;
 
-    this.crepe.editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      const tr = view.state.tr.replaceWith(
-        match.from, match.to,
-        replacement ? view.state.schema.text(replacement) : (view.state.schema as any).topNodeType.createAndFill()!.content
-      );
-      view.dispatch(tr);
-    });
+    if (this.target === 'source') {
+      const view = this.sourceEditor!.view;
+      view.dispatch({ changes: { from: match.from, to: match.to, insert: replacement } });
+    } else {
+      this.crepe!.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const tr = view.state.tr.replaceWith(
+          match.from, match.to,
+          replacement ? view.state.schema.text(replacement) : (view.state.schema as any).topNodeType.createAndFill()!.content
+        );
+        view.dispatch(tr);
+      });
+    }
 
     // Re-search
     this.onSearchChange();
   }
 
   private replaceAllMatches(): void {
-    if (!this.crepe || this.matches.length === 0) return;
+    if (!this.hasTarget || this.matches.length === 0) return;
     const rawReplacement = this.replaceInput.value;
+    const expand = (m: SearchMatch) =>
+      this.regexMode ? expandReplacement(rawReplacement, m.groups) : rawReplacement;
 
-    this.crepe.editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      // Replace in reverse order to preserve positions
-      let tr = view.state.tr;
-      for (let i = this.matches.length - 1; i >= 0; i--) {
-        const m = this.matches[i];
-        const replacement = this.regexMode ? expandReplacement(rawReplacement, m.groups) : rawReplacement;
-        if (replacement) {
-          tr = tr.replaceWith(m.from, m.to, view.state.schema.text(replacement));
-        } else {
-          tr = tr.delete(m.from, m.to);
+    if (this.target === 'source') {
+      const view = this.sourceEditor!.view;
+      view.dispatch({
+        changes: this.matches.map((m) => ({ from: m.from, to: m.to, insert: expand(m) })),
+      });
+    } else {
+      this.crepe!.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        // Replace in reverse order to preserve positions
+        let tr = view.state.tr;
+        for (let i = this.matches.length - 1; i >= 0; i--) {
+          const m = this.matches[i];
+          const replacement = expand(m);
+          if (replacement) {
+            tr = tr.replaceWith(m.from, m.to, view.state.schema.text(replacement));
+          } else {
+            tr = tr.delete(m.from, m.to);
+          }
         }
-      }
-      view.dispatch(tr);
-    });
+        view.dispatch(tr);
+      });
+    }
 
     this.onSearchChange();
   }
 
   private updateDecorations(): void {
+    if (this.target === 'source') {
+      this.sourceEditor?.view.dispatch({
+        effects: setSearchMatches.of({ matches: this.matches, current: this.currentIndex }),
+      });
+      return;
+    }
     if (!this.crepe) return;
     this.crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
@@ -409,6 +409,12 @@ export class SearchBar {
   }
 
   private clearHighlights(): void {
+    if (this.target === 'source') {
+      this.sourceEditor?.view.dispatch({
+        effects: setSearchMatches.of({ matches: [], current: -1 }),
+      });
+      return;
+    }
     if (!this.crepe) return;
     try {
       this.crepe.editor.action((ctx) => {
@@ -420,8 +426,20 @@ export class SearchBar {
   }
 
   private scrollToCurrent(): void {
-    if (!this.crepe || this.currentIndex < 0) return;
+    if (this.currentIndex < 0) return;
     const match = this.matches[this.currentIndex];
+
+    if (this.target === 'source') {
+      const view = this.sourceEditor?.view;
+      if (!view) return;
+      view.dispatch({
+        selection: EditorSelection.single(match.from, match.to),
+        scrollIntoView: true,
+      });
+      return;
+    }
+
+    if (!this.crepe) return;
     this.crepe.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to));

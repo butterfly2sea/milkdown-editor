@@ -79,6 +79,7 @@ class I18n {
           menuNew: this._locale.menuNew,
           menuOpen: this._locale.menuOpen,
           menuOpenFolder: this._locale.menuOpenFolder,
+          menuRevealFile: this._locale.menuRevealFile,
           menuSave: this._locale.menuSave,
           menuSaveAs: this._locale.menuSaveAs,
           menuExportHtml: this._locale.menuExportHTML,

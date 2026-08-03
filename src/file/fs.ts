@@ -183,6 +183,40 @@ export class FileManager {
     return { ...next, children };
   }
 
+  /** Run the open dialog without loading anything. Callers need the path up
+   *  front so they can check whether another window already owns the document
+   *  before this one commits to it. */
+  async pickOpenPath(): Promise<string | null> {
+    try {
+      const selected = await open({
+        multiple: false,
+        directory: false,
+        filters: [
+          { name: 'Markdown', extensions: ['md', 'markdown'] },
+        ],
+      });
+      return (selected as string | null) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Counterpart of {@link pickOpenPath} for "Save As". */
+  async pickSavePath(): Promise<string | null> {
+    try {
+      const filePath = this.store.get('currentFilePath');
+      const path = await save({
+        defaultPath: filePath || 'untitled.md',
+        filters: [
+          { name: 'Markdown', extensions: ['md'] },
+        ],
+      });
+      return path || null;
+    } catch {
+      return null;
+    }
+  }
+
   async openFile(path?: string): Promise<string> {
     try {
       if (!path) {
@@ -233,15 +267,9 @@ export class FileManager {
     }
   }
 
-  async saveAs(content: string): Promise<boolean> {
+  async saveAs(content: string, targetPath?: string): Promise<boolean> {
     try {
-      const filePath = this.store.get('currentFilePath');
-      const path = await save({
-        defaultPath: filePath || 'untitled.md',
-        filters: [
-          { name: 'Markdown', extensions: ['md'] },
-        ],
-      });
+      const path = targetPath ?? await this.pickSavePath();
       if (!path) return false;
       this.setCurrentPath(path);
       await writeTextFile(path, content);

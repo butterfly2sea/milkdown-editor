@@ -2,6 +2,7 @@ export const MenuEvents = {
   NEW: 'menu-new',
   OPEN: 'menu-open',
   OPEN_FOLDER: 'menu-open-folder',
+  REVEAL_FILE: 'menu-reveal-file',
   SAVE: 'menu-save',
   SAVE_AS: 'menu-save-as',
   EXPORT_HTML: 'menu-export-html',

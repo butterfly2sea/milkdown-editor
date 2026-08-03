@@ -460,12 +460,41 @@
   border-top: 1px solid rgba(245,158,11,0.25);
 }
 
-/* Responsive: auto-hide sidebar on narrow screens */
-@media (max-width: 768px) {
-  #sidebar.open {
-    position: absolute;
-    z-index: 50;
-    height: calc(100vh - 36px - 28px);
-    box-shadow: var(--shadow-md);
-  }
+/* The editor never outgrows its column: long words/URLs wrap instead of pushing
+   #editor-root past the space the sidebar left it. */
+#editor-root .milkdown {
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+/* Multi-cursor (Alt+click / Alt+drag / Alt+J).
+   ProseMirror paints only the primary cursor natively; every secondary one is
+   drawn here from plugin decorations. */
+.milkdown .pm-multi-range {
+  background: rgba(var(--accent-rgb), 0.3);
+  border-radius: 2px;
+}
+
+.milkdown .pm-multi-caret {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 1em;
+  vertical-align: -0.15em;
+}
+
+.milkdown .pm-multi-caret::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: var(--accent);
+  animation: pm-multi-caret-blink 1.06s steps(1) infinite;
+}
+
+@keyframes pm-multi-caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
