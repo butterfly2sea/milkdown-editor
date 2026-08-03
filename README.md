@@ -18,7 +18,9 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Table Editing** — Interactive table creation and editing
 
-* **Find & Replace** — Regex, case-sensitive, and whole-word search with capture-group replacement
+* **Find & Replace** — Regex, case-sensitive, and whole-word search with capture-group replacement, in both WYSIWYG and source mode
+
+* **Multiple Cursors** — `Alt`+click, `Alt`+drag for column selection, and `Alt+J` to add the next occurrence
 
 * **Highlight** — `==highlight==` marks, toggled from the selection toolbar (pure Markdown, no HTML)
 
@@ -32,7 +34,7 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Themes** — Light and dark mode with smooth transitions
 
-* **Source Mode** — Toggle between WYSIWYG and raw Markdown source
+* **Source Mode** — Toggle between WYSIWYG and a CodeMirror 6 raw Markdown editor
 
 * **i18n** — English and Chinese, auto-detects system language, extensible
 
@@ -58,6 +60,18 @@ Type `==text==`, or select text and click the highlight button in the selection 
 * Toggles: **Aa** match case, **ab** whole word, **`.*`** regular expression.
 * In regex mode, replacements support capture groups (`$1`, `$2`, `$&`).
 * `Enter` / `Shift+Enter` jump to the next / previous match. The bar stays pinned to the top-right.
+* Works the same in WYSIWYG and source mode.
+
+### Multiple Cursors
+
+Available in the WYSIWYG editor, in source mode, and inside code blocks:
+
+* `Alt`+click adds a cursor (click an existing one again to remove it).
+* `Alt`+drag or `Shift+Alt`+drag selects a block of lines — one selection per row.
+* `Alt+J` adds the next occurrence of the selection, `Shift+Alt+J` the previous one. With nothing selected, the first press selects the word under the cursor. Then just type to replace every occurrence at once.
+* Typing, `Backspace`, `Delete` and pasting plain text apply to every cursor. `Esc`, `Enter`, the arrow keys or a plain click collapse back to one.
+
+> On Linux, GNOME and KDE grab `Alt`+drag to move windows by default. If block selection does nothing, remap or disable that binding in your desktop settings.
 
 ### Math
 
@@ -95,11 +109,13 @@ Local images render through Tauri's asset protocol while Markdown keeps portable
 * `Ctrl+O` open, `Ctrl+N` new, `Ctrl+S` save, `Ctrl+Shift+S` save as.
 * **Drop a `.md` file** onto the window to open it; **drop a folder** to open it as a file tree in the sidebar.
 * Auto-save runs ~2s after you stop typing.
+* **File → Show in File Manager** opens the current document's folder with the file selected (Explorer / Finder / your Linux file manager).
+* **One window per document** — you can run several windows at once, but a document that is already open somewhere will not open a second time. Opening it again brings the window that has it to the front instead, so two auto-saving copies can never overwrite each other.
 
 ### Sidebar · Source Mode · Export · Theme · Language
 
 * `Ctrl+\` toggles the sidebar (file tree + document outline).
-* The **`</>`** button (status bar) switches between WYSIWYG and raw Markdown source.
+* The **`</>`** button (status bar) switches between WYSIWYG and raw Markdown source. Source mode is a full CodeMirror 6 editor with Markdown highlighting, undo history, find & replace and multiple cursors.
 * The **Export** button exports to HTML with embedded styles; `Ctrl+Shift+E` opens the export menu.
 * `Ctrl+/` or the sun/moon button toggles light / dark theme; the **EN/ZH** button switches language.
 
@@ -110,6 +126,9 @@ Local images render through Tauri's asset protocol while Markdown keeps portable
 | Save / Save As          | `Ctrl+S` / `Ctrl+Shift+S`                         |
 | Open / New file         | `Ctrl+O` / `Ctrl+N`                               |
 | Find / Replace          | `Ctrl+F` / `Ctrl+H`                               |
+| Add cursor              | `Alt`+click                                       |
+| Column selection        | `Alt`+drag / `Shift+Alt`+drag                     |
+| Select next / prev occurrence | `Alt+J` / `Shift+Alt+J`                     |
 | Heading 1-6             | `Ctrl+1` ... `Ctrl+6`                             |
 | Convert to body text    | `Ctrl+Alt+0`                                       |
 | Bold / Italic           | `Ctrl+B` / `Ctrl+I`                               |
