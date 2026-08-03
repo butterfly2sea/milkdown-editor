@@ -1,3 +1,7 @@
+mod doc_registry;
+mod reveal;
+
+use doc_registry::DocRegistry;
 use tauri::{Emitter, Manager};
 use std::fs;
 use std::sync::Mutex;
@@ -7,6 +11,7 @@ struct PendingFile(Mutex<Option<String>>);
 const MENU_NEW: &str = "menu-new";
 const MENU_OPEN: &str = "menu-open";
 const MENU_OPEN_FOLDER: &str = "menu-open-folder";
+const MENU_REVEAL_FILE: &str = "menu-reveal-file";
 const MENU_SAVE: &str = "menu-save";
 const MENU_SAVE_AS: &str = "menu-save-as";
 const MENU_EXPORT_HTML: &str = "menu-export-html";
@@ -37,6 +42,7 @@ struct MenuLabels {
     menu_new: String,
     menu_open: String,
     menu_open_folder: String,
+    menu_reveal_file: String,
     menu_save: String,
     menu_save_as: String,
     menu_export_html: String,
@@ -74,6 +80,7 @@ fn build_menu_with_labels(
         .item(&MenuItemBuilder::with_id("new", &labels.menu_new).accelerator("CmdOrCtrl+N").build(app)?)
         .item(&MenuItemBuilder::with_id("open", &labels.menu_open).accelerator("CmdOrCtrl+O").build(app)?)
         .item(&MenuItemBuilder::with_id("open-folder", &labels.menu_open_folder).build(app)?)
+        .item(&MenuItemBuilder::with_id("reveal-file", &labels.menu_reveal_file).build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id("save", &labels.menu_save).accelerator("CmdOrCtrl+S").build(app)?)
         .item(&MenuItemBuilder::with_id("save-as", &labels.menu_save_as).accelerator("CmdOrCtrl+Shift+S").build(app)?)
@@ -181,6 +188,7 @@ fn default_labels() -> MenuLabels {
         menu_new: "New".into(),
         menu_open: "Open...".into(),
         menu_open_folder: "Open Folder...".into(),
+        menu_reveal_file: "Show in File Manager".into(),
         menu_save: "Save".into(),
         menu_save_as: "Save As...".into(),
         menu_export_html: "Export HTML".into(),
@@ -272,6 +280,7 @@ fn menu_event_name(id: &str) -> Option<&'static str> {
         "new" => Some(MENU_NEW),
         "open" => Some(MENU_OPEN),
         "open-folder" => Some(MENU_OPEN_FOLDER),
+        "reveal-file" => Some(MENU_REVEAL_FILE),
         "save" => Some(MENU_SAVE),
         "save-as" => Some(MENU_SAVE_AS),
         "export-html" => Some(MENU_EXPORT_HTML),
@@ -295,14 +304,38 @@ fn menu_event_name(id: &str) -> Option<&'static str> {
     }
 }
 
+/// First openable path on the command line, if any.
+fn cli_openable_path() -> Option<String> {
+    std::env::args().skip(1).find(|arg| is_openable_path(arg))
+}
+
 pub fn run() {
+    // Before anything is built: if this launch is about a markdown file that a
+    // live instance already has open, hand it over and quit. Doing it here (not
+    // in `setup`) means no window is ever created, so nothing flashes on screen.
+    let cli_path = cli_openable_path();
+    if let Some(path) = cli_path.as_deref() {
+        if is_markdown_file(path) && doc_registry::forward_to_owner(path) {
+            eprintln!("[doc-registry] {path} is open in another window; handed off");
+            std::process::exit(0);
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_http::init())
-        .invoke_handler(tauri::generate_handler![update_menu, open_url, take_pending_file])
-        .setup(|app| {
+        .invoke_handler(tauri::generate_handler![
+            update_menu,
+            open_url,
+            take_pending_file,
+            doc_registry::claim_document,
+            doc_registry::release_document,
+            doc_registry::focus_document_owner,
+            reveal::reveal_in_file_manager
+        ])
+        .setup(move |app| {
             // Clear stale WebView cache after version upgrade
             clear_webview_cache_on_upgrade(app);
 
@@ -311,6 +344,12 @@ pub fn run() {
 
             // Initialize pending file state
             app.manage(PendingFile(Mutex::new(None)));
+
+            // Announce this instance so others can hand documents to it. Port 0
+            // means the listener could not bind; ownership then degrades to
+            // "everyone opens everything", which is the pre-existing behaviour.
+            let port = doc_registry::start_listener(app.handle().clone()).unwrap_or(0);
+            app.manage(DocRegistry { port });
 
             #[cfg(target_os = "macos")]
             {
@@ -321,13 +360,15 @@ pub fn run() {
                 }
             }
 
-            // Check CLI args for a file or folder to open
-            let args: Vec<String> = std::env::args().collect();
-            for arg in args.iter().skip(1) {
-                if is_openable_path(arg) {
-                    *app.state::<PendingFile>().0.lock().unwrap() = Some(arg.clone());
-                    break;
+            // A file or folder to open was passed on the command line. The
+            // early-exit check above already established that no other instance
+            // owns it, so claim it right now — waiting for the frontend to do
+            // it leaves a window where a second launch could slip past.
+            if let Some(path) = cli_path.clone() {
+                if is_markdown_file(&path) {
+                    let _ = doc_registry::claim(port, &path);
                 }
+                *app.state::<PendingFile>().0.lock().unwrap() = Some(path);
             }
 
             Ok(())
@@ -351,6 +392,14 @@ pub fn run() {
                         .map(|p: std::path::PathBuf| p.to_string_lossy().to_string())
                         .unwrap_or_else(|_| url.to_string());
                     if is_markdown_file(&path) {
+                        let self_port = _app.try_state::<DocRegistry>().map(|s| s.port);
+                        // Already open in another window? Send it there instead
+                        // of loading a second, independently auto-saving copy.
+                        if let Some(self_port) = self_port {
+                            if doc_registry::focus_owner(self_port, &path) {
+                                break;
+                            }
+                        }
                         if let Some(window) = _app.get_webview_window("main") {
                             let _ = window.emit("open-file", path.clone());
                             let _ = window.set_focus();
@@ -360,6 +409,13 @@ pub fn run() {
                         }
                         break;
                     }
+                }
+            }
+
+            // Leave no record behind for the next launch to probe.
+            if let tauri::RunEvent::Exit = &_event {
+                if let Some(state) = _app.try_state::<DocRegistry>() {
+                    doc_registry::unregister(state.port);
                 }
             }
         });

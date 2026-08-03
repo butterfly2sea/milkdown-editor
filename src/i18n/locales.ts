@@ -16,6 +16,9 @@ export interface Locale {
 
   // File operations
   unsavedWarning: string;
+  docOpenInAnotherWindow: string;
+  revealNoFile: string;
+  revealFailed: string;
   fileName: string;
   newFile: string;
   newFolder: string;
@@ -77,6 +80,7 @@ export interface Locale {
   menuNew: string;
   menuOpen: string;
   menuOpenFolder: string;
+  menuRevealFile: string;
   menuSave: string;
   menuSaveAs: string;
   menuExportHTML: string;
@@ -201,6 +205,9 @@ export const en: Locale = {
   sourceMode: 'Source code / WYSIWYG',
   viewModeUndoWarning: 'Switching modes will clear undo history. Continue?',
   unsavedWarning: 'You have unsaved changes. Discard them?',
+  docOpenInAnotherWindow: 'This document is already open in another window; switched to it.',
+  revealNoFile: 'Save the document first — it has no folder yet.',
+  revealFailed: 'Could not open the file manager.',
   fileName: 'File name:',
   newFile: 'New File',
   newFolder: 'New Folder',
@@ -252,6 +259,7 @@ export const en: Locale = {
   menuNew: 'New',
   menuOpen: 'Open...',
   menuOpenFolder: 'Open Folder...',
+  menuRevealFile: 'Show in File Manager',
   menuSave: 'Save',
   menuSaveAs: 'Save As...',
   menuExportHTML: 'Export HTML',
@@ -360,6 +368,9 @@ export const zh: Locale = {
   sourceMode: '源码 / 所见即所得',
   viewModeUndoWarning: '切换模式将清空撤销历史，是否继续？',
   unsavedWarning: '有未保存的更改，是否丢弃？',
+  docOpenInAnotherWindow: '该文档已在另一个窗口中打开，已切换过去。',
+  revealNoFile: '请先保存文档——它还没有所在文件夹。',
+  revealFailed: '无法打开文件管理器。',
   fileName: '文件名：',
   newFile: '新建文件',
   newFolder: '新建文件夹',
@@ -411,6 +422,7 @@ export const zh: Locale = {
   menuNew: '新建',
   menuOpen: '打开...',
   menuOpenFolder: '打开文件夹...',
+  menuRevealFile: '打开文件所在文件夹',
   menuSave: '保存',
   menuSaveAs: '另存为...',
   menuExportHTML: '导出 HTML',
