@@ -10,6 +10,13 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.2.4",
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/language": "^6.10.1",
+    "@codemirror/search": "^6.5.0",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.16.0",
     "@milkdown/crepe": "^7.19.0",
     "@milkdown/kit": "^7.19.0",
     "@milkdown/plugin-listener": "^7.19.0",

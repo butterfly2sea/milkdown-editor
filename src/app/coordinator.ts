@@ -1,5 +1,6 @@
 import { createEditor, getCursorInfo, editorUndo, editorRedo, getHeadings, scrollToPos } from '../editor/setup';
 import { SearchBar } from '../editor/search';
+import { SourceEditor } from '../editor/source-editor';
 import { ZoomController } from '../editor/zoom';
 import { SidebarTabs } from '../sidebar/sidebar-tabs';
 import { TableOfContents } from '../sidebar/toc';
@@ -186,6 +187,14 @@ export class AppCoordinator {
 
   // Update cursor position on click/key navigation
   const updateCursorPos = () => {
+    // `statusBar.viewMode` only flips *after* onViewModeToggle returns, so ask
+    // the source editor itself which mode is on screen right now.
+    if (sourceEditor.isVisible) {
+      const { state } = sourceEditor.view;
+      const line = state.doc.lineAt(state.selection.main.head);
+      statusBar.updateCursorPosition(line.number, state.selection.main.head - line.from + 1);
+      return;
+    }
     if (editorInstance) {
       const { line, col } = getCursorInfo(editorInstance.crepe);
       statusBar.updateCursorPosition(line, col);
@@ -212,17 +221,93 @@ export class AppCoordinator {
   // Initial word count
   statusBar.updateWordCount(defaultContent);
 
+  // -- Document ownership across windows --
+  // Several windows may run at once, but a document may only be edited in one
+  // of them: they all auto-save, so two copies would overwrite each other. The
+  // Rust side keeps the registry and focuses whichever window already owns a
+  // file. A registry failure must never block editing, so it fails open.
+
+  const inTauri = '__TAURI_INTERNALS__' in window;
+
+  /** @returns false when another window owns the document (and has been raised). */
+  const claimDocument = async (path: string): Promise<boolean> => {
+    if (!inTauri) return true;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return (await invoke<string>('claim_document', { path })) !== 'busy';
+    } catch (err) {
+      console.warn('[doc-registry] claim failed:', err);
+      return true;
+    }
+  };
+
+  const releaseDocument = async (path: string): Promise<void> => {
+    if (!inTauri) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('release_document', { path });
+    } catch (err) {
+      console.warn('[doc-registry] release failed:', err);
+    }
+  };
+
+  /** Open the current document's folder in the OS file manager, with the file
+   *  itself selected where the platform supports it. */
+  const revealCurrentFile = async (): Promise<void> => {
+    const filePath = getCurrentFilePath();
+    if (!filePath) {
+      toast(i18n.t.revealNoFile, 'warn');
+      return;
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('reveal_in_file_manager', { path: filePath });
+    } catch (err) {
+      console.error('[reveal] failed:', err);
+      toast(i18n.t.revealFailed, 'error');
+    }
+  };
+
+  const focusEditor = () => {
+    if (sourceEditor.isVisible) sourceEditor.focus();
+    else (root.querySelector('.ProseMirror') as HTMLElement | null)?.focus();
+  };
+
   // -- File operations --
 
   const openFile = async (path?: string) => {
     if (imageStorageConversionBusy()) return;
+
+    const target = path ?? await fileManager.pickOpenPath();
+    if (!target) return;
+
+    // Already the document in this window — just put the cursor back in it
+    // rather than reloading and re-prompting about unsaved changes.
+    if (target === getCurrentFilePath()) {
+      focusEditor();
+      return;
+    }
+
     if (isUnsaved()) {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
-    const content = await fileManager.openFile(path);
+
+    if (!(await claimDocument(target))) {
+      toast(i18n.t.docOpenInAnotherWindow, 'warn');
+      return;
+    }
+
+    const previousPath = getCurrentFilePath();
+    const content = await fileManager.openFile(target);
+    if (previousPath && previousPath !== target) {
+      void releaseDocument(previousPath);
+    }
     if (content !== undefined) {
       editorReady = false;  // Suppress onChange during load
       editor.setMarkdown(content);
+      // Source mode holds its own copy of the document; without this it would
+      // keep showing (and, on save, write back) the previous file.
+      if (sourceEditor.isVisible) sourceEditor.value = content;
       updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
       root.scrollTop = 0;
       statusBar.updateWordCount(content);
@@ -232,32 +317,49 @@ export class AppCoordinator {
   };
 
   const getContent = () => {
-    return statusBar.viewMode === 'source'
-      ? sourceTextarea.value
-      : editor.getMarkdown();
+    return sourceEditor.isVisible ? sourceEditor.value : editor.getMarkdown();
+  };
+
+  const saveAs = async (): Promise<boolean> => {
+    if (imageStorageConversionBusy()) return false;
+
+    // Pick the destination first: writing over a file another window is editing
+    // would be exactly the double-edit the registry exists to prevent.
+    const target = await fileManager.pickSavePath();
+    if (!target) return false;
+
+    const previousPath = getCurrentFilePath();
+    if (target !== previousPath && !(await claimDocument(target))) {
+      toast(i18n.t.docOpenInAnotherWindow, 'warn');
+      return false;
+    }
+
+    const success = await fileManager.saveAs(getContent(), target);
+    if (success) {
+      if (previousPath && previousPath !== target) {
+        void releaseDocument(previousPath);
+      }
+      fileTree.setActiveFile(getCurrentFilePath());
+    }
+    return success;
   };
 
   const saveFile = async () => {
-    const md = getContent();
-    const success = await fileManager.saveFile(md);
-    if (success) {
-      // Upload to WebDAV after save
-      const filePath = getCurrentFilePath();
-      if (filePath) {
-        syncManager.uploadFile(filePath, md).catch((err) => {
-          console.error('[sync] upload after save failed:', err);
-          toast(i18n.t.syncUploadFailed, 'error');
-        });
-      }
+    // No path yet → this is really a "Save As"; route it through the version
+    // that checks ownership instead of FileManager's built-in fallback.
+    if (!getCurrentFilePath()) {
+      if (!(await saveAs())) return;
+    } else if (!(await fileManager.saveFile(getContent()))) {
+      return;
     }
-  };
 
-  const saveAs = async () => {
-    if (imageStorageConversionBusy()) return;
-    const md = getContent();
-    const success = await fileManager.saveAs(md);
-    if (success) {
-      fileTree.setActiveFile(getCurrentFilePath());
+    // Upload to WebDAV after save
+    const filePath = getCurrentFilePath();
+    if (filePath) {
+      syncManager.uploadFile(filePath, getContent()).catch((err) => {
+        console.error('[sync] upload after save failed:', err);
+        toast(i18n.t.syncUploadFailed, 'error');
+      });
     }
   };
 
@@ -266,10 +368,14 @@ export class AppCoordinator {
     if (isUnsaved()) {
       if (!confirm(i18n.t.unsavedWarning)) return;
     }
+    // The window is letting go of the document, so another one may take it.
+    const previousPath = getCurrentFilePath();
+    if (previousPath) void releaseDocument(previousPath);
     fileManager.newFile();
     const newContent = '# Untitled\n\n';
     editorReady = false;  // Suppress onChange during load
     editor.setMarkdown(newContent);
+    if (sourceEditor.isVisible) sourceEditor.value = newContent;
     updateImageStorageState('local');
     root.scrollTop = 0;
     fileManager.setBaseContent(newContent);
@@ -456,27 +562,19 @@ export class AppCoordinator {
 
   // -- Source / WYSIWYG toggle --
 
-  // Source code textarea (hidden by default)
-  const sourceTextarea = document.createElement('textarea');
-  sourceTextarea.id = 'source-editor';
-  sourceTextarea.spellcheck = false;
-  sourceTextarea.style.cssText = `
-    display: none;
-    width: 100%;
-    height: 100%;
-    padding: 24px 48px;
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-    font-size: 14px;
-    line-height: 1.6;
-    border: none;
-    outline: none;
-    resize: none;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    tab-size: 4;
-    box-sizing: border-box;
-  `;
-  root.parentElement?.appendChild(sourceTextarea);
+  // Source mode lives *inside* #editor-root, as a sibling of `.milkdown`. It
+  // used to hang off #workspace, which left #editor-root as an empty sliver
+  // beside it — and the find bar, being anchored to #editor-root, got squeezed
+  // into the top-left corner and clipped.
+  const sourceEditor = new SourceEditor(root, (value) => {
+    const reallyChanged = fileManager.hasRealChanges(value);
+    appStore.set('hasUnsavedChanges', reallyChanged);
+    statusBar.updateWordCount(value);
+    if (reallyChanged) {
+      fileManager.scheduleAutoSave(value);
+    }
+  });
+  searchBar.setSourceEditor(sourceEditor);
 
   statusBar.onViewModeToggle = (mode) => {
     if (imageStorageConversionBusy()) return false;
@@ -485,28 +583,24 @@ export class AppCoordinator {
     const editorDiv = root.querySelector('.milkdown') as HTMLElement || root.firstElementChild as HTMLElement;
     if (mode === 'source') {
       // Switch to source mode
-      const md = editor.getMarkdown();
-      sourceTextarea.value = md;
+      sourceEditor.value = editor.getMarkdown();
       if (editorDiv) editorDiv.style.display = 'none';
-      sourceTextarea.style.display = 'block';
-      sourceTextarea.focus();
+      sourceEditor.show();
+      sourceEditor.focus();
     } else {
       // Switch back to WYSIWYG
-      const md = sourceTextarea.value;
-      sourceTextarea.style.display = 'none';
+      const md = sourceEditor.value;
+      sourceEditor.hide();
       if (editorDiv) editorDiv.style.display = '';
       editor.setMarkdown(md);
       updateImageStorageState(detectImageStorageState(editor.crepe) ?? imageStorageState);
     }
+    searchBar.setTarget(mode === 'source' ? 'source' : 'wysiwyg');
+    updateCursorPos();
     return true;
   };
 
-  // Sync source textarea changes for word count
-  eventManager.on(sourceTextarea, 'input', () => {
-    const reallyChanged = fileManager.hasRealChanges(sourceTextarea.value);
-    appStore.set('hasUnsavedChanges', reallyChanged);
-    statusBar.updateWordCount(sourceTextarea.value);
-  });
+  eventManager.addCleanup(() => sourceEditor.destroy());
 
   // -- Status bar callbacks --
 
@@ -613,6 +707,7 @@ export class AppCoordinator {
             const content = await fileManager.reloadFile();
             if (content !== null) {
               editor.setMarkdown(content);
+              if (sourceEditor.isVisible) sourceEditor.value = content;
               updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
               root.scrollTop = 0;
               statusBar.updateWordCount(content);
@@ -738,6 +833,9 @@ export class AppCoordinator {
               fileTree.onSyncFile?.(filePath);
             }
           }
+        },
+        [MenuEvents.REVEAL_FILE]: () => {
+          void revealCurrentFile();
         },
         [MenuEvents.TOGGLE_SIDEBAR]: () => toggleSidebar(),
         [MenuEvents.TOGGLE_THEME]: () => toggleTheme(),

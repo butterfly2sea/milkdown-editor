@@ -13,6 +13,8 @@ import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './f
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
 import { buildImageBlockConfig, createImagePasteDropPlugin } from './image-localize';
 import { formatShortcutPlugin } from './format-shortcuts';
+import { codeBlockMultiCursorExtensions } from './cm-multi-cursor';
+import { createMultiCursorPlugin } from './plugins/multi-cursor';
 import type { ImageStorageMode } from './image-storage';
 
 export interface EditorInstance {
@@ -49,6 +51,7 @@ export async function createEditor(
         getImageStorageMode,
         onUrlUploadRequired,
       ),
+      [CrepeFeature.CodeMirror]: { extensions: codeBlockMultiCursorExtensions },
     },
   });
 
@@ -77,6 +80,9 @@ export async function createEditor(
     getImageStorageMode,
     onUrlUploadRequired,
   )));
+  // Registered last on purpose: its Backspace/Delete handling must only run
+  // after the preset keymaps have declined the key.
+  crepe.editor.use($prose(() => createMultiCursorPlugin()));
 
   await crepe.create();
   frontmatter.mount(root);
