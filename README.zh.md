@@ -112,6 +112,20 @@
 * **文件 → 打开文件所在文件夹**：在系统文件管理器中打开当前文档所在目录，并选中该文件（资源管理器 / 访达 / Linux 文件管理器）。
 * **同一文档只在一个窗口打开** — 可以同时开多个窗口，但已经打开的文档不会再打开第二份；再次打开它只会把持有它的窗口切到前台，避免两份副本各自自动保存、互相覆盖。
 
+### 用 Milkdown 打开 `.md` 文件（macOS）
+
+在访达中选中任意 `.md` 文件，按 `Cmd+I`，在「打开方式」中选择 **Milkdown Editor**，再点「**全部更改…**」。
+
+如果设置不生效——文件仍然被原来的编辑器打开——多半是 macOS 把关联指到了某个残留的旧副本上。请确保 `/Applications` 里只保留一份，删掉其他位置的副本（下载目录、旧的构建产物目录），然后重建 LaunchServices 数据库：
+
+```bash
+LSR=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+$LSR -kill -r -domain local -domain system -domain user
+$LSR -f "/Applications/Milkdown Editor.app"
+```
+
+之后再用 `Cmd+I` 重新设置一次默认程序。
+
 ### 侧边栏 · 源码模式 · 导出 · 主题 · 语言
 
 * `Ctrl+\` 切换侧边栏（文件树 + 文档大纲）。文件树 tab 只在打开文件夹后才出现。
