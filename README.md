@@ -28,7 +28,7 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Flexible Image Storage** — Keep images as Base64, online URLs, or relative files in a `<name>.assets/` folder
 
-* **File Management** — Open files/folders, save, auto-save (2s debounce)
+* **File Management** — Open files/folders, save, configurable auto-save
 
 * **Export** — Export to HTML (with embedded styles) or PDF (via print)
 
@@ -108,13 +108,13 @@ Local images render through Tauri's asset protocol while Markdown keeps portable
 
 * `Ctrl+O` open, `Ctrl+N` new, `Ctrl+S` save, `Ctrl+Shift+S` save as.
 * **Drop a `.md` file** onto the window to open it; **drop a folder** to open it as a file tree in the sidebar.
-* Auto-save runs ~2s after you stop typing.
+* Auto-save runs after you stop typing. **Settings → Editor** turns it off or changes the delay (2 / 5 / 10 / 30 / 60 seconds, default 2). `Ctrl+S` always saves regardless.
 * **File → Show in File Manager** opens the current document's folder with the file selected (Explorer / Finder / your Linux file manager).
 * **One window per document** — you can run several windows at once, but a document that is already open somewhere will not open a second time. Opening it again brings the window that has it to the front instead, so two auto-saving copies can never overwrite each other.
 
 ### Sidebar · Source Mode · Export · Theme · Language
 
-* `Ctrl+\` toggles the sidebar (file tree + document outline).
+* `Ctrl+\` toggles the sidebar (file tree + document outline). The file tree tab only appears once a folder is open.
 * The **`</>`** button (status bar) switches between WYSIWYG and raw Markdown source. Source mode is a full CodeMirror 6 editor with Markdown highlighting, undo history, find & replace and multiple cursors.
 * The **Export** button exports to HTML with embedded styles; `Ctrl+Shift+E` opens the export menu.
 * `Ctrl+/` or the sun/moon button toggles light / dark theme; the **EN/ZH** button switches language.

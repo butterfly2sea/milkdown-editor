@@ -1,6 +1,7 @@
 import { getPlantUMLServer, setPlantUMLServer } from '../editor/plugins/plantuml-plugin';
 import { getSyncConfig, saveSyncConfig, type SyncConfig } from '../sync/sync-config';
 import { WebDAVClient } from '../sync/webdav-client';
+import { AUTO_SAVE_DELAYS, getAutoSaveConfig, saveAutoSaveConfig } from './auto-save-config';
 import { i18n } from '../i18n';
 
 const STORAGE_KEY = 'plantuml-server-url';
@@ -19,6 +20,11 @@ export function initPlantUMLServerFromStorage(): void {
 let _onSyncConfigChange: (() => void) | null = null;
 export function setOnSyncConfigChange(fn: () => void): void {
   _onSyncConfigChange = fn;
+}
+
+let _onAutoSaveConfigChange: (() => void) | null = null;
+export function setOnAutoSaveConfigChange(fn: () => void): void {
+  _onAutoSaveConfigChange = fn;
 }
 
 export function showSettingsModal(): void {
@@ -113,23 +119,72 @@ export function showSettingsModal(): void {
   });
   modal.appendChild(resetLink);
 
-  // -- WebDAV Sync section --
-  const divider = document.createElement('hr');
-  divider.style.cssText = 'border: none; border-top: 1px solid var(--border-color, #e8e8e8); margin: 20px 0;';
-  modal.appendChild(divider);
+  const inputStyle = input.style.cssText + ' margin-bottom: 8px;';
+  const fieldLabelStyle = 'display: block; font-size: 12px; color: var(--text-secondary, #666); margin-bottom: 4px;';
 
-  const syncTitle = document.createElement('h4');
-  syncTitle.textContent = i18n.t.webdavSettings;
-  syncTitle.style.cssText = 'margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary, #333);';
-  modal.appendChild(syncTitle);
+  const startSection = (titleText: string) => {
+    const divider = document.createElement('hr');
+    divider.style.cssText = 'border: none; border-top: 1px solid var(--border-color, #e8e8e8); margin: 20px 0;';
+    modal.appendChild(divider);
+    const heading = document.createElement('h4');
+    heading.textContent = titleText;
+    heading.style.cssText = 'margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary, #333);';
+    modal.appendChild(heading);
+  };
+
+  // -- Editor section --
+  startSection(i18n.t.editorSettings);
+
+  const autoSaveConfig = getAutoSaveConfig();
+
+  const autoSaveRow = document.createElement('div');
+  autoSaveRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
+  const autoSaveCheckbox = document.createElement('input');
+  autoSaveCheckbox.type = 'checkbox';
+  autoSaveCheckbox.checked = autoSaveConfig.enabled;
+  const autoSaveLabel = document.createElement('span');
+  autoSaveLabel.textContent = i18n.t.autoSaveEnabled;
+  autoSaveLabel.style.cssText = 'font-size: 13px; color: var(--text-primary, #333);';
+  autoSaveRow.appendChild(autoSaveCheckbox);
+  autoSaveRow.appendChild(autoSaveLabel);
+  modal.appendChild(autoSaveRow);
+
+  const autoSaveDelayLabel = document.createElement('label');
+  autoSaveDelayLabel.textContent = i18n.t.autoSaveDelay;
+  autoSaveDelayLabel.style.cssText = fieldLabelStyle;
+  modal.appendChild(autoSaveDelayLabel);
+
+  const autoSaveDelaySelect = document.createElement('select');
+  autoSaveDelaySelect.style.cssText = inputStyle;
+  for (const secs of AUTO_SAVE_DELAYS) {
+    const opt = document.createElement('option');
+    opt.value = String(secs);
+    opt.textContent = `${secs} ${i18n.t.seconds}`;
+    if (autoSaveConfig.delaySeconds === secs) opt.selected = true;
+    autoSaveDelaySelect.appendChild(opt);
+  }
+  modal.appendChild(autoSaveDelaySelect);
+
+  // The delay is meaningless while auto-save is off; grey it out rather than
+  // let it look like it still applies.
+  const updateAutoSaveDelayState = () => {
+    const off = !autoSaveCheckbox.checked;
+    autoSaveDelaySelect.disabled = off;
+    autoSaveDelaySelect.style.opacity = off ? '0.5' : '1';
+    autoSaveDelayLabel.style.opacity = off ? '0.5' : '1';
+  };
+  autoSaveCheckbox.addEventListener('change', updateAutoSaveDelayState);
+  updateAutoSaveDelayState();
+
+  // -- WebDAV Sync section --
+  startSection(i18n.t.webdavSettings);
 
   const syncConfig = getSyncConfig();
-  const inputStyle = input.style.cssText + ' margin-bottom: 8px;';
 
   const createField = (labelText: string, value: string, placeholder: string, type = 'text') => {
     const lbl = document.createElement('label');
     lbl.textContent = labelText;
-    lbl.style.cssText = 'display: block; font-size: 12px; color: var(--text-secondary, #666); margin-bottom: 4px;';
+    lbl.style.cssText = fieldLabelStyle;
     const inp = document.createElement('input');
     inp.type = type;
     inp.value = value;
@@ -148,7 +203,7 @@ export function showSettingsModal(): void {
   // Sync interval
   const intervalLabel = document.createElement('label');
   intervalLabel.textContent = i18n.t.webdavSyncInterval;
-  intervalLabel.style.cssText = 'display: block; font-size: 12px; color: var(--text-secondary, #666); margin-bottom: 4px;';
+  intervalLabel.style.cssText = fieldLabelStyle;
   modal.appendChild(intervalLabel);
   const intervalSelect = document.createElement('select');
   intervalSelect.style.cssText = inputStyle;
@@ -252,6 +307,13 @@ export function showSettingsModal(): void {
       setPlantUMLServer(DEFAULT_SERVER);
       localStorage.removeItem(STORAGE_KEY);
     }
+
+    // Save auto-save settings
+    saveAutoSaveConfig({
+      enabled: autoSaveCheckbox.checked,
+      delaySeconds: parseInt(autoSaveDelaySelect.value) || AUTO_SAVE_DELAYS[0],
+    });
+    _onAutoSaveConfigChange?.();
 
     // Save WebDAV settings
     const newSyncConfig: SyncConfig = {

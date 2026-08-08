@@ -256,7 +256,10 @@ fn clear_webview_cache_on_upgrade(app: &tauri::App) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 fn is_markdown_file(path: &str) -> bool {
-    path.ends_with(".md") || path.ends_with(".markdown")
+    // Finder hands over whatever case the file is named in, so `NOTES.MD` has
+    // to match too.
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".md") || lower.ends_with(".markdown")
 }
 
 fn is_safe_path(path: &str) -> bool {
@@ -322,6 +325,11 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        // Registered on the builder, not in `setup`: on a macOS cold start
+        // `RunEvent::Opened` is delivered *before* `RunEvent::Ready`, and
+        // `setup` only runs on `Ready`. State managed there does not exist yet
+        // when the file to open arrives, and the path would be dropped.
+        .manage(PendingFile(Mutex::new(None)))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
@@ -341,9 +349,6 @@ pub fn run() {
 
             let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
-
-            // Initialize pending file state
-            app.manage(PendingFile(Mutex::new(None)));
 
             // Announce this instance so others can hand documents to it. Port 0
             // means the listener could not bind; ownership then degrades to
@@ -392,20 +397,35 @@ pub fn run() {
                         .map(|p: std::path::PathBuf| p.to_string_lossy().to_string())
                         .unwrap_or_else(|_| url.to_string());
                     if is_markdown_file(&path) {
-                        let self_port = _app.try_state::<DocRegistry>().map(|s| s.port);
+                        // Record the path first. On a cold start neither the
+                        // window nor the registry exists yet, and every shortcut
+                        // below is allowed to fail — but the path must survive
+                        // for the frontend to drain via `take_pending_file`.
+                        let pending = _app.try_state::<PendingFile>();
+                        if let Some(state) = &pending {
+                            *state.0.lock().unwrap() = Some(path.clone());
+                        }
+                        let clear_pending = || {
+                            if let Some(state) = &pending {
+                                *state.0.lock().unwrap() = None;
+                            }
+                        };
+
                         // Already open in another window? Send it there instead
                         // of loading a second, independently auto-saving copy.
-                        if let Some(self_port) = self_port {
+                        if let Some(self_port) = _app.try_state::<DocRegistry>().map(|s| s.port) {
                             if doc_registry::focus_owner(self_port, &path) {
+                                clear_pending();
                                 break;
                             }
                         }
+                        // Window up (warm start): the live listener handles it,
+                        // so drop the record rather than leave it for a later
+                        // reload to reopen.
                         if let Some(window) = _app.get_webview_window("main") {
                             let _ = window.emit("open-file", path.clone());
                             let _ = window.set_focus();
-                        }
-                        if let Some(state) = _app.try_state::<PendingFile>() {
-                            *state.0.lock().unwrap() = Some(path);
+                            clear_pending();
                         }
                         break;
                     }

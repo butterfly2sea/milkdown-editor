@@ -33,10 +33,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis", "dmg", "deb", "appimage"],
+    "targets": ["msi", "nsis", "app", "dmg", "deb", "appimage"],
     "fileAssociations": [
       {
         "ext": ["md", "markdown"],
+        "name": "Markdown Document",
+        "role": "Editor",
+        "rank": "Owner",
+        "contentTypes": ["net.daringfireball.markdown"],
         "mimeType": "text/markdown",
         "description": "Markdown Document"
       }

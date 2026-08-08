@@ -27,6 +27,8 @@ use tauri::{Emitter, Manager};
 const IPC_TIMEOUT: Duration = Duration::from_millis(300);
 /// A lock file older than this belonged to a process that died holding it.
 const LOCK_STALE_AFTER: Duration = Duration::from_secs(5);
+/// Reply a listener writes back once it has acted on a command.
+const IPC_ACK: &str = "ok";
 
 #[derive(Serialize, Deserialize, Default)]
 struct Registry {
@@ -175,6 +177,10 @@ fn is_alive(port: u16) -> bool {
     TcpStream::connect_timeout(&addr_of(port), IPC_TIMEOUT).is_ok()
 }
 
+/// Send `command` and wait for the acknowledgement. A bare successful write is
+/// not proof of delivery: ephemeral ports get recycled, so an unrelated process
+/// on a stale port would accept the bytes and the caller would wrongly conclude
+/// another instance took the document — leaving the file unopened.
 fn send_command(port: u16, command: &IpcCommand) -> bool {
     let Ok(payload) = serde_json::to_string(command) else {
         return false;
@@ -183,7 +189,12 @@ fn send_command(port: u16, command: &IpcCommand) -> bool {
         return false;
     };
     let _ = stream.set_write_timeout(Some(IPC_TIMEOUT));
-    stream.write_all(payload.as_bytes()).is_ok() && stream.write_all(b"\n").is_ok()
+    let _ = stream.set_read_timeout(Some(IPC_TIMEOUT));
+    if stream.write_all(payload.as_bytes()).is_err() || stream.write_all(b"\n").is_err() {
+        return false;
+    }
+    let mut reply = String::new();
+    BufReader::new(&stream).read_line(&mut reply).is_ok() && reply.trim() == IPC_ACK
 }
 
 /// Drop records whose process is gone. `self_port` is never probed — this
@@ -220,8 +231,9 @@ pub fn start_listener(app: tauri::AppHandle) -> Option<u16> {
 
     std::thread::spawn(move || {
         for incoming in listener.incoming() {
-            let Ok(stream) = incoming else { continue };
+            let Ok(mut stream) = incoming else { continue };
             let _ = stream.set_read_timeout(Some(IPC_TIMEOUT));
+            let _ = stream.set_write_timeout(Some(IPC_TIMEOUT));
             let mut line = String::new();
             if BufReader::new(&stream).read_line(&mut line).is_err() {
                 continue;
@@ -238,8 +250,12 @@ pub fn start_listener(app: tauri::AppHandle) -> Option<u16> {
                         let _ = window.emit("open-file", path);
                     }
                 }
-                Err(err) => eprintln!("[doc-registry] ignoring malformed command: {err}"),
+                Err(err) => {
+                    eprintln!("[doc-registry] ignoring malformed command: {err}");
+                    continue; // no ack: the sender must not count this as handled
+                }
             }
+            let _ = writeln!(stream, "{IPC_ACK}");
         }
     });
 

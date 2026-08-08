@@ -25,6 +25,7 @@ export interface Locale {
   createFailed: string;
   createFolderFailed: string;
   folderOpenFailed: string;
+  fileOpenFailed: string;
   fileTreeRefreshFailed: string;
   webdavNotConfigured: string;
   empty: string;
@@ -155,6 +156,12 @@ export interface Locale {
   menuSyncFile: string;
   menuMarkSync: string;
 
+  // Editor settings
+  editorSettings: string;
+  autoSaveEnabled: string;
+  autoSaveDelay: string;
+  seconds: string;
+
   // WebDAV sync
   webdavSettings: string;
   webdavServerUrl: string;
@@ -214,6 +221,7 @@ export const en: Locale = {
   createFailed: 'Failed to create file',
   createFolderFailed: 'Failed to create folder',
   folderOpenFailed: 'Failed to open folder',
+  fileOpenFailed: 'Failed to open file',
   fileTreeRefreshFailed: 'Failed to refresh files',
   webdavNotConfigured: 'Configure WebDAV in Settings',
   empty: '(empty)',
@@ -321,6 +329,10 @@ export const en: Locale = {
   syncStatusSynced: 'Synced',
   menuSyncFile: 'Sync Current File',
   menuMarkSync: 'Mark for Sync',
+  editorSettings: 'Editor',
+  autoSaveEnabled: 'Auto-save',
+  autoSaveDelay: 'Auto-save delay',
+  seconds: 'seconds',
   webdavSettings: 'WebDAV Sync',
   webdavServerUrl: 'Server URL',
   webdavUsername: 'Username',
@@ -377,6 +389,7 @@ export const zh: Locale = {
   createFailed: '创建文件失败',
   createFolderFailed: '创建文件夹失败',
   folderOpenFailed: '打开文件夹失败',
+  fileOpenFailed: '打开文件失败',
   fileTreeRefreshFailed: '刷新文件列表失败',
   webdavNotConfigured: '请先在设置中配置 WebDAV',
   empty: '空',
@@ -484,6 +497,10 @@ export const zh: Locale = {
   syncStatusSynced: '已同步',
   menuSyncFile: '同步当前文件',
   menuMarkSync: '标记同步',
+  editorSettings: '编辑器',
+  autoSaveEnabled: '自动保存',
+  autoSaveDelay: '自动保存延时',
+  seconds: '秒',
   webdavSettings: 'WebDAV 同步',
   webdavServerUrl: '服务器地址',
   webdavUsername: '用户名',
