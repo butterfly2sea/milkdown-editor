@@ -7,12 +7,13 @@ import { TableOfContents } from '../sidebar/toc';
 import { RemoteFileTree } from '../sidebar/remote-tree';
 import { TitleBar } from '../titlebar/titlebar';
 import { StatusBar } from '../statusbar/statusbar';
-import { FileManager } from '../file/fs';
+import { FileManager, type FileTreeNode } from '../file/fs';
 import { FileTree } from '../sidebar/file-tree';
 import { exportHTML } from '../file/export-html';
 
 import { i18n } from '../i18n';
-import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange } from '../settings/settings-modal';
+import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange, setOnAutoSaveConfigChange } from '../settings/settings-modal';
+import { getAutoSaveConfig } from '../settings/auto-save-config';
 import { SyncManager } from '../sync/sync-manager';
 import { showAboutModal } from '../about/about-modal';
 import { MenuEvents, type MenuEvent } from '../types/menu-events';
@@ -110,6 +111,9 @@ export class AppCoordinator {
   // Initialize sidebar tabs first, then create FileTree inside the files container
   const sidebarTabs = new SidebarTabs(sidebarEl);
   const fileTree = new FileTree(sidebarTabs.filesEl);
+  // Without a folder the tree has nothing to show, so the tab would only offer
+  // a blank panel. It comes back the moment a folder is opened.
+  sidebarTabs.setTabVisible('files', fileManager.hasFolderOpen);
 
   const getCurrentFilePath = () => appStore.get('currentFilePath');
   const getCurrentFileName = () => {
@@ -217,6 +221,7 @@ export class AppCoordinator {
   fileManager.onAutoSave = () => {
     appStore.set('hasUnsavedChanges', false);
   };
+  fileManager.setAutoSaveConfig(getAutoSaveConfig());
 
   // Initial word count
   statusBar.updateWordCount(defaultContent);
@@ -299,21 +304,28 @@ export class AppCoordinator {
 
     const previousPath = getCurrentFilePath();
     const content = await fileManager.openFile(target);
+    if (content === null) {
+      // Claimed above but never loaded — hand it back, or this window would
+      // block every later attempt to open a file it is not even showing.
+      void releaseDocument(target);
+      console.error('[file] open failed:', fileManager.lastError);
+      toast(i18n.t.fileOpenFailed, 'error');
+      return;
+    }
     if (previousPath && previousPath !== target) {
       void releaseDocument(previousPath);
     }
-    if (content !== undefined) {
-      editorReady = false;  // Suppress onChange during load
-      editor.setMarkdown(content);
-      // Source mode holds its own copy of the document; without this it would
-      // keep showing (and, on save, write back) the previous file.
-      if (sourceEditor.isVisible) sourceEditor.value = content;
-      updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
-      root.scrollTop = 0;
-      statusBar.updateWordCount(content);
-      updateToc();
-      markEditorReady();
-    }
+
+    editorReady = false;  // Suppress onChange during load
+    editor.setMarkdown(content);
+    // Source mode holds its own copy of the document; without this it would
+    // keep showing (and, on save, write back) the previous file.
+    if (sourceEditor.isVisible) sourceEditor.value = content;
+    updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
+    root.scrollTop = 0;
+    statusBar.updateWordCount(content);
+    updateToc();
+    markEditorReady();
   };
 
   const getContent = () => {
@@ -382,12 +394,17 @@ export class AppCoordinator {
     markEditorReady();
   };
 
+  const showFolderTree = (tree: FileTreeNode) => {
+    sidebarEl.classList.add('open');
+    sidebarTabs.setTabVisible('files', true);
+    fileTree.render(tree);
+    sidebarTabs.setActiveTab('files');
+  };
+
   const openFolder = async () => {
     const tree = await fileManager.openFolder();
     if (tree) {
-      sidebarEl.classList.add('open');
-      fileTree.render(tree);
-      sidebarTabs.setActiveTab('files');
+      showFolderTree(tree);
     } else if (fileManager.lastError) {
       console.error('[file] open folder failed:', fileManager.lastError);
       toast(i18n.t.folderOpenFailed, 'error');
@@ -397,9 +414,7 @@ export class AppCoordinator {
   const openFolderByPath = async (dirPath: string) => {
     const tree = await fileManager.openFolderByPath(dirPath);
     if (tree) {
-      sidebarEl.classList.add('open');
-      fileTree.render(tree);
-      sidebarTabs.setActiveTab('files');
+      showFolderTree(tree);
     } else if (fileManager.lastError) {
       console.error('[file] open folder failed:', fileManager.lastError);
       toast(i18n.t.folderOpenFailed, 'error');
@@ -466,6 +481,10 @@ export class AppCoordinator {
     fileTree.syncEnabled = syncManager.isConfigured;
     sidebarTabs.setTabVisible('remote', syncManager.isConfigured);
     initRemoteTree();
+  });
+
+  setOnAutoSaveConfigChange(() => {
+    fileManager.setAutoSaveConfig(getAutoSaveConfig());
   });
 
   // -- Theme --

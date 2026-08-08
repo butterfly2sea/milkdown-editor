@@ -1,6 +1,7 @@
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from '@tauri-apps/plugin-fs';
 import type { AppStore } from '../app/store';
+import { getAutoSaveConfig, type AutoSaveConfig } from '../settings/auto-save-config';
 
 export interface FileTreeNode {
   name: string;
@@ -17,6 +18,7 @@ export class FileManager {
   private _openFolderName: string | null = null;
   private _lastFolderTree: FileTreeNode | null = null;
   private _lastError: unknown = null;
+  private autoSaveConfig: AutoSaveConfig = getAutoSaveConfig();
   public onAutoSave?: () => void;
 
   constructor(private store: AppStore) {}
@@ -217,21 +219,17 @@ export class FileManager {
     }
   }
 
-  async openFile(path?: string): Promise<string> {
+  /** Callers pick the path themselves via {@link pickOpenPath} so they can check
+   *  ownership before committing to it.
+   *  @returns the file's content, or null when it could not be read. */
+  async openFile(path: string): Promise<string | null> {
+    this._lastError = null;
     try {
-      if (!path) {
-        const selected = await open({
-          multiple: false,
-          directory: false,
-          filters: [
-            { name: 'Markdown', extensions: ['md', 'markdown'] },
-          ],
-        });
-        if (!selected) return '';
-        path = selected as string;
-      }
-      this.setCurrentPath(path);
       const content = await readTextFile(path);
+      // Adopt the path only once the read succeeded. On failure the editor keeps
+      // showing the previous document, and repointing `currentFilePath` would
+      // make the next save overwrite the target with that stale content.
+      this.setCurrentPath(path);
       this._lastSavedContent = content;
       this.store.set('hasUnsavedChanges', false);
       try {
@@ -241,8 +239,11 @@ export class FileManager {
         this._lastModifiedAt = null;
       }
       return content;
-    } catch {
-      return '';
+    } catch (err) {
+      // Swallowing this used to render a permission error as an empty document
+      // with no hint that anything went wrong.
+      this._lastError = err;
+      return null;
     }
   }
 
@@ -294,8 +295,23 @@ export class FileManager {
     this.store.set('hasUnsavedChanges', false);
   }
 
+  setAutoSaveConfig(config: AutoSaveConfig): void {
+    this.autoSaveConfig = config;
+    // A write queued under the old settings must not slip through after the
+    // user just turned auto-save off.
+    if (!config.enabled) this.cancelAutoSave();
+  }
+
+  cancelAutoSave(): void {
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
+  }
+
   scheduleAutoSave(content: string): void {
-    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    this.cancelAutoSave();
+    if (!this.autoSaveConfig.enabled) return;
     this.autoSaveTimer = setTimeout(async () => {
       if (this.store.get('currentFilePath') && this.store.get('hasUnsavedChanges')) {
         const success = await this.saveFile(content);
@@ -303,7 +319,7 @@ export class FileManager {
           this.onAutoSave?.();
         }
       }
-    }, 2000);
+    }, this.autoSaveConfig.delaySeconds * 1000);
   }
 
   async createFile(dirPath: string, name: string): Promise<string | null> {

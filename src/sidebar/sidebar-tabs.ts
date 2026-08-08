@@ -93,16 +93,14 @@ export class SidebarTabs {
   setTabVisible(tab: SidebarTab, visible: boolean): void {
     const btn = tab === 'files' ? this.filesBtn : tab === 'toc' ? this.tocBtn : this.remoteBtn;
     btn.style.display = visible ? '' : 'none';
-    // If hiding the active tab, switch to another
+    // Hiding the active tab strands the user on an empty panel, so fall back to
+    // the outline — the only tab that is never hidden.
     if (!visible && this.activeTab === tab) {
-      this.setActiveTab(tab === 'files' ? 'toc' : 'files');
+      this.setActiveTab('toc');
     }
   }
 
   private updateTabStyles(): void {
-    const activeStyle = 'border-bottom: 2px solid var(--accent, #0366d6); color: var(--accent, #0366d6);';
-    const inactiveStyle = 'border-bottom: 2px solid transparent; color: var(--text-muted, #999);';
-
     this.filesBtn.style.borderBottom = this.activeTab === 'files'
       ? '2px solid var(--accent, #0366d6)' : '2px solid transparent';
     this.filesBtn.style.color = this.activeTab === 'files'
