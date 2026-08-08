@@ -112,6 +112,20 @@ Local images render through Tauri's asset protocol while Markdown keeps portable
 * **File → Show in File Manager** opens the current document's folder with the file selected (Explorer / Finder / your Linux file manager).
 * **One window per document** — you can run several windows at once, but a document that is already open somewhere will not open a second time. Opening it again brings the window that has it to the front instead, so two auto-saving copies can never overwrite each other.
 
+### Opening `.md` files with Milkdown (macOS)
+
+Select any `.md` file in Finder, press `Cmd+I`, pick **Milkdown Editor** under *Open with*, then click **Change All…**.
+
+If the setting does not stick — the file still opens in your old editor — macOS is most likely resolving the association to a stale copy of the app. Keep exactly one copy in `/Applications`, delete any others (Downloads, an old build directory), then rebuild the LaunchServices database:
+
+```bash
+LSR=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+$LSR -kill -r -domain local -domain system -domain user
+$LSR -f "/Applications/Milkdown Editor.app"
+```
+
+Then set the default app again with `Cmd+I`.
+
 ### Sidebar · Source Mode · Export · Theme · Language
 
 * `Ctrl+\` toggles the sidebar (file tree + document outline). The file tree tab only appears once a folder is open.

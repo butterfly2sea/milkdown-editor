@@ -99,6 +99,16 @@ jobs:
             The macOS build is not notarized. If macOS shows "damaged" or "unidentified developer" warning, use one of these methods:
             1. Right-click the app → Open → Confirm
             2. Run in Terminal: `xattr -cr /Applications/Milkdown\ Editor.app`
+
+            ### Opening `.md` files with Milkdown
+            Select a `.md` file in Finder, press `Cmd+I`, pick **Milkdown Editor** under *Open with*, then click **Change All…**.
+
+            If it does not stick, macOS is probably resolving the association to a stale copy of the app. Keep exactly one copy in `/Applications`, delete any others, then rebuild the LaunchServices database and set it again:
+            ```bash
+            LSR=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+            $LSR -kill -r -domain local -domain system -domain user
+            $LSR -f "/Applications/Milkdown Editor.app"
+            ```
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
