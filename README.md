@@ -28,6 +28,8 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Editor Zoom** — Zoom the editing area with `Ctrl`+scroll or `Ctrl`+`]` / `[` / `0`
 
+* **Page Margin** — Choose how much space the text leaves on either side: normal, narrow, or none
+
 * **Flexible Image Storage** — Keep images as Base64, online URLs, or relative files in a `<name>.assets/` folder
 
 * **File Management** — Open files/folders, save, configurable auto-save
@@ -100,6 +102,13 @@ Write `$inline$` or `$$block$$` math. Click a formula to edit it visually (MathL
 Zoom the editing area only — the toolbar and status bar stay at native size:
 
 * `Ctrl`+scroll, or `Ctrl+]` / `Ctrl+[` to zoom in / out, and `Ctrl+0` to reset. The level is remembered across sessions and shown in the status bar.
+
+### Page Margin
+
+**Settings → Editor → Page margin** sets how much empty space the text leaves on either side. It applies to both WYSIWYG and source mode and is remembered across sessions.
+
+* **Normal** — the default column.
+* **Narrow** / **None** — progressively wider text. "None" stops just short of the window edge: the block handle (insert / drag) is drawn in that gutter and would otherwise be clipped.
 
 ### Images
 
