@@ -2,6 +2,7 @@ import type { Ctx } from '@milkdown/kit/ctx';
 import { remarkCtx, remarkStringifyOptionsCtx, schemaCtx, serializerCtx } from '@milkdown/kit/core';
 import { SerializerState } from '@milkdown/kit/transformer';
 import { remarkGFMPlugin } from '@milkdown/kit/preset/gfm';
+import { attentionHandlers } from './mdast-attention';
 
 /**
  * The editor rebuilds Markdown from its own AST every time it saves, so any
@@ -29,6 +30,9 @@ const MERGEABLE_MARKS = new Set(['strong', 'emphasis', 'delete']);
 export function configureMarkdownStringify(ctx: Ctx): void {
   ctx.update(remarkStringifyOptionsCtx, (prev) => ({
     ...prev,
+    // Milkdown's own emphasis handlers write delimiters that CommonMark does
+    // not read back as emphasis. See {@link attentionHandlers}.
+    handlers: { ...prev.handlers, ...attentionHandlers },
     // remark defaults to `*` for bullets and `***` for rules; `-` for both is
     // what the overwhelming majority of Markdown in the wild uses.
     bullet: '-' as const,

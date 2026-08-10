@@ -32,6 +32,7 @@
     "marked": "^17.0.5",
     "mathlive": "^0.105.0",
     "mdast-util-find-and-replace": "^3.0.2",
+    "mdast-util-to-markdown": "^2.1.2",
     "mermaid": "^11.16.0",
     "plantuml-encoder": "^1.4.0"
   },
