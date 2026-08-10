@@ -1,6 +1,7 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
-import { editorViewCtx, parserCtx } from '@milkdown/kit/core';
+import { editorViewCtx, parserCtx, remarkCtx } from '@milkdown/kit/core';
+import type { RemarkParser } from '@milkdown/kit/transformer';
 import { undo as pmUndo, redo as pmRedo } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { Slice } from 'prosemirror-model';
@@ -13,6 +14,9 @@ import { createFrontmatterCard, splitFrontmatter, composeFrontmatter } from './f
 import { clipboardToolbarConfig, createClipboardContextMenuPlugin } from './toolbar-clipboard';
 import { buildImageBlockConfig, createImagePasteDropPlugin } from './image-localize';
 import { formatShortcutPlugin } from './format-shortcuts';
+import { imageBlockAltSchema } from './plugins/image-block-alt';
+import { configureMarkdownStringify, installMarkdownNormalizer } from './markdown-format';
+import { preserveSourceBlocks } from './source-preserve';
 import { codeBlockMultiCursorExtensions } from './cm-multi-cursor';
 import { createMultiCursorPlugin } from './plugins/multi-cursor';
 import type { ImageStorageMode } from './image-storage';
@@ -21,6 +25,10 @@ export interface EditorInstance {
   crepe: Crepe;
   getMarkdown: () => string;
   setMarkdown: (md: string) => void;
+  /** `generated` with every block that still means what it did in `original`
+   *  restored to the text `original` spells it with. See
+   *  {@link preserveSourceBlocks}. */
+  preserveSource: (original: string, generated: string) => string;
   destroy: () => Promise<void>;
 }
 
@@ -58,6 +66,7 @@ export async function createEditor(
   const compose = () => composeFrontmatter(frontmatter.getYaml(), crepe.getMarkdown());
 
   crepe.editor
+    .config(configureMarkdownStringify)
     .config((ctx) => {
       ctx.get(listenerCtx).markdownUpdated(() => {
         onChange?.(compose());
@@ -70,6 +79,8 @@ export async function createEditor(
     crepe.editor.use(plugin);
   }
   crepe.editor.use(formatShortcutPlugin);
+  // After Crepe's own features, so this replaces its `image-block` schema.
+  crepe.editor.use(imageBlockAltSchema);
 
   // Register search decoration plugin via Milkdown's prose plugin wrapper
   const { $prose } = await import('@milkdown/kit/utils');
@@ -85,10 +96,26 @@ export async function createEditor(
   crepe.editor.use($prose(() => createMultiCursorPlugin()));
 
   await crepe.create();
+  crepe.editor.action(installMarkdownNormalizer);
   frontmatter.mount(root);
   frontmatter.onChange(() => onChange?.(compose()));
 
   const getMarkdown = (): string => compose();
+
+  // The editor's own remark instance, so the comparison uses exactly the
+  // grammar and stringify options the document was serialized with.
+  const preserveSource = (original: string, generated: string): string => {
+    let remark: RemarkParser | null = null;
+    crepe.editor.action((ctx) => {
+      remark = ctx.get(remarkCtx);
+    });
+    if (!remark) return generated;
+    const processor = remark as RemarkParser;
+    return preserveSourceBlocks(original, generated, {
+      parse: (md) => processor.parse(md) as never,
+      stringify: (tree) => processor.stringify(tree as never),
+    });
+  };
 
   const setMarkdown = (md: string): void => {
     const { yaml, body } = splitFrontmatter(md);
@@ -112,7 +139,7 @@ export async function createEditor(
     await crepe.destroy();
   };
 
-  return { crepe, getMarkdown, setMarkdown, destroy };
+  return { crepe, getMarkdown, setMarkdown, preserveSource, destroy };
 }
 
 export interface TocEntry {

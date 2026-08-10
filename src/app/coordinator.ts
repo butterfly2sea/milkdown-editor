@@ -212,7 +212,7 @@ export class AppCoordinator {
   });
 
   // Set base content for change tracking
-  fileManager.setBaseContent(defaultContent);
+  fileManager.setBaseContent(defaultContent, editor.getMarkdown());
 
   // Auto-save callback
   // Reset initial unsaved state
@@ -318,6 +318,9 @@ export class AppCoordinator {
 
     editorReady = false;  // Suppress onChange during load
     editor.setMarkdown(content);
+    // Reformatting done by the round-trip through the editor's AST is not an
+    // edit; without this the file opens dirty and auto-save writes it back.
+    fileManager.setNormalizedBaseline(editor.getMarkdown());
     // Source mode holds its own copy of the document; without this it would
     // keep showing (and, on save, write back) the previous file.
     if (sourceEditor.isVisible) sourceEditor.value = content;
@@ -331,6 +334,13 @@ export class AppCoordinator {
   const getContent = () => {
     return sourceEditor.isVisible ? sourceEditor.value : editor.getMarkdown();
   };
+
+  // In source mode the text *is* the document: rewriting a line the user just
+  // typed back to how the file used to spell it would undo their edit. The
+  // WYSIWYG editor has no such claim on its output, so there it applies.
+  fileManager.sourcePreserver = (original, generated) => (
+    sourceEditor.isVisible ? generated : editor.preserveSource(original, generated)
+  );
 
   const saveAs = async (): Promise<boolean> => {
     if (imageStorageConversionBusy()) return false;
@@ -368,7 +378,10 @@ export class AppCoordinator {
     // Upload to WebDAV after save
     const filePath = getCurrentFilePath();
     if (filePath) {
-      syncManager.uploadFile(filePath, getContent()).catch((err) => {
+      // What was written, not what the editor produced — the two differ once
+      // untouched blocks are handed back in their original spelling, and the
+      // remote copy has to match the local file byte for byte.
+      syncManager.uploadFile(filePath, fileManager.savedContent).catch((err) => {
         console.error('[sync] upload after save failed:', err);
         toast(i18n.t.syncUploadFailed, 'error');
       });
@@ -390,7 +403,7 @@ export class AppCoordinator {
     if (sourceEditor.isVisible) sourceEditor.value = newContent;
     updateImageStorageState('local');
     root.scrollTop = 0;
-    fileManager.setBaseContent(newContent);
+    fileManager.setBaseContent(newContent, editor.getMarkdown());
     markEditorReady();
   };
 
@@ -725,12 +738,15 @@ export class AppCoordinator {
           if (confirm(message)) {
             const content = await fileManager.reloadFile();
             if (content !== null) {
+              editorReady = false;  // Suppress onChange during load
               editor.setMarkdown(content);
+              fileManager.setNormalizedBaseline(editor.getMarkdown());
               if (sourceEditor.isVisible) sourceEditor.value = content;
               updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
               root.scrollTop = 0;
               statusBar.updateWordCount(content);
               updateToc();
+              markEditorReady();
             }
           } else {
             await fileManager.dismissExternalChange();
