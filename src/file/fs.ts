@@ -12,7 +12,14 @@ export interface FileTreeNode {
 
 export class FileManager {
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Byte-for-byte what is on disk. */
   private _lastSavedContent: string = '';
+  /** What the editor produces when it round-trips {@link _lastSavedContent}.
+   *  The editor rebuilds Markdown from its own AST, so the two differ for most
+   *  real documents (table padding, emphasis markers, list spacing…). Change
+   *  detection has to run against this, or every freshly opened file counts as
+   *  modified and auto-save writes the reformatted text straight back. */
+  private _baseline: string = '';
   private _lastModifiedAt: number | null = null;
   private _openFolderPath: string | null = null;
   private _openFolderName: string | null = null;
@@ -20,6 +27,11 @@ export class FileManager {
   private _lastError: unknown = null;
   private autoSaveConfig: AutoSaveConfig = getAutoSaveConfig();
   public onAutoSave?: () => void;
+  /** Given the text on disk and the editor's output, returns what to actually
+   *  write. Lets the caller hand back the parts of the file the author never
+   *  touched exactly as they were written, instead of the editor's spelling of
+   *  them. */
+  public sourcePreserver?: (original: string, generated: string) => string;
 
   constructor(private store: AppStore) {}
 
@@ -27,12 +39,37 @@ export class FileManager {
     return this._lastError;
   }
 
-  setBaseContent(content: string): void {
+  /** The text this manager believes is on disk — what a sync target should get,
+   *  so that remote and local copies stay byte-identical. */
+  get savedContent(): string {
+    return this._lastSavedContent;
+  }
+
+  private toDiskText(generated: string): string {
+    if (!this.sourcePreserver) return generated;
+    try {
+      return this.sourcePreserver(this._lastSavedContent, generated);
+    } catch {
+      return generated;
+    }
+  }
+
+  /** @param normalized the editor's serialization of `content`, when the caller
+   *  already has it. Callers that load a document into the editor first should
+   *  follow up with {@link setNormalizedBaseline}. */
+  setBaseContent(content: string, normalized?: string): void {
     this._lastSavedContent = content;
+    this._baseline = normalized ?? content;
+  }
+
+  /** Record how the editor serializes the document it currently holds, so that
+   *  serialization alone no longer reads as an edit. */
+  setNormalizedBaseline(normalized: string): void {
+    this._baseline = normalized;
   }
 
   hasRealChanges(currentContent: string): boolean {
-    return currentContent !== this._lastSavedContent;
+    return currentContent !== this._baseline && currentContent !== this._lastSavedContent;
   }
 
   async openFolder(): Promise<FileTreeNode | null> {
@@ -230,7 +267,7 @@ export class FileManager {
       // showing the previous document, and repointing `currentFilePath` would
       // make the next save overwrite the target with that stale content.
       this.setCurrentPath(path);
-      this._lastSavedContent = content;
+      this.setBaseContent(content);
       this.store.set('hasUnsavedChanges', false);
       try {
         const info = await stat(path);
@@ -252,9 +289,17 @@ export class FileManager {
     if (!filePath) {
       return this.saveAs(content);
     }
+    const text = this.toDiskText(content);
+    // Nothing to write means nothing to write: skipping keeps the file's mtime
+    // (and any sync tooling watching it) untouched.
+    if (text === this._lastSavedContent) {
+      this.setBaseContent(text, content);
+      this.store.set('hasUnsavedChanges', false);
+      return true;
+    }
     try {
-      await writeTextFile(filePath, content);
-      this._lastSavedContent = content;
+      await writeTextFile(filePath, text);
+      this.setBaseContent(text, content);
       this.store.set('hasUnsavedChanges', false);
       try {
         const info = await stat(filePath);
@@ -272,9 +317,12 @@ export class FileManager {
     try {
       const path = targetPath ?? await this.pickSavePath();
       if (!path) return false;
+      // Resolved before the path switches, so the comparison still runs against
+      // the document this text came from rather than the new destination.
+      const text = this.toDiskText(content);
       this.setCurrentPath(path);
-      await writeTextFile(path, content);
-      this._lastSavedContent = content;
+      await writeTextFile(path, text);
+      this.setBaseContent(text, content);
       this.store.set('hasUnsavedChanges', false);
       try {
         const info = await stat(path);
@@ -290,7 +338,7 @@ export class FileManager {
 
   newFile(): void {
     this.setCurrentPath(null);
-    this._lastSavedContent = '';
+    this.setBaseContent('');
     this._lastModifiedAt = null;
     this.store.set('hasUnsavedChanges', false);
   }
@@ -361,7 +409,7 @@ export class FileManager {
       const content = await readTextFile(filePath);
       const info = await stat(filePath);
       this._lastModifiedAt = info.mtime?.getTime() ?? null;
-      this._lastSavedContent = content;
+      this.setBaseContent(content);
       this.store.set('hasUnsavedChanges', false);
       return content;
     } catch {

@@ -128,6 +128,71 @@
   border-color: var(--accent) !important;
 }
 
+/* Formula controls: the source toggle plus MathLive's own virtual-keyboard and
+ * menu toggles. MathLive keeps the latter two in the field's flex row, where
+ * they add ~70px to every formula and push the surrounding text around. All
+ * three are taken out of flow and faded in on hover instead, so a formula
+ * occupies exactly the width of the formula itself. */
+.math-wrapper.math-inline {
+  /* Fully above the formula so hovering never hides what is being edited. */
+  --math-tool-top: -20px;
+  --math-tool-menu-right: 20px;
+  --math-tool-keyboard-right: 42px;
+}
+
+.math-wrapper.math-block {
+  --math-tool-top: 2px;
+  --math-tool-menu-right: 32px;
+  --math-tool-keyboard-right: 54px;
+}
+
+.math-wrapper .math-toggle-btn,
+.math-wrapper math-field::part(virtual-keyboard-toggle),
+.math-wrapper math-field::part(menu-toggle) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.math-wrapper:hover .math-toggle-btn,
+.math-wrapper:focus-within .math-toggle-btn,
+.math-wrapper:hover math-field::part(virtual-keyboard-toggle),
+.math-wrapper:hover math-field::part(menu-toggle),
+.math-wrapper:focus-within math-field::part(virtual-keyboard-toggle),
+.math-wrapper:focus-within math-field::part(menu-toggle) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* `!important` on display because MathLive sets `display: none` inline on the
+ * menu toggle whenever a field is too narrow to fit it — a fit test that no
+ * longer applies once the button floats outside the field. */
+.math-wrapper math-field::part(virtual-keyboard-toggle),
+.math-wrapper math-field::part(menu-toggle) {
+  display: flex !important;
+  position: absolute;
+  top: var(--math-tool-top);
+  width: 20px;
+  height: 20px;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color, #e8e8e8);
+  border-radius: 3px;
+  background: var(--bg-elevated, #fff);
+  color: var(--text-muted, #999);
+  z-index: 10;
+}
+
+.math-wrapper math-field::part(menu-toggle) {
+  right: var(--math-tool-menu-right);
+}
+
+.math-wrapper math-field::part(virtual-keyboard-toggle) {
+  right: var(--math-tool-keyboard-right);
+}
+
 .math-block {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;

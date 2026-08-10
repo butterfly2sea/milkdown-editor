@@ -80,34 +80,28 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
     toggleBtn.textContent = '</>';
     toggleBtn.title = i18n.t.mathToggleSource;
     toggleBtn.className = 'math-toggle-btn';
+    // Visibility is left to editor-overrides.css, which reveals this button and
+    // MathLive's own two toggles together on hover.
     toggleBtn.style.cssText = `
       position: absolute;
-      top: ${display === 'block' ? '2px' : '-2px'};
-      right: ${display === 'block' ? '8px' : '-4px'};
+      top: var(--math-tool-top);
+      right: ${display === 'block' ? '10px' : '-2px'};
       font-size: 10px;
-      padding: 1px 4px;
+      height: 20px;
+      padding: 0 4px;
+      box-sizing: border-box;
       border: 1px solid var(--border-color, #e8e8e8);
       border-radius: 3px;
       background: var(--bg-elevated, #fff);
       color: var(--text-muted, #999);
       cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.15s;
       z-index: 10;
-      line-height: 1.2;
+      line-height: 1;
     `;
     toggleBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       switchMode(mode === 'visual' ? 'source' : 'visual');
-    });
-
-    // Show toggle on hover
-    dom.addEventListener('mouseenter', () => {
-      toggleBtn.style.opacity = '1';
-    });
-    dom.addEventListener('mouseleave', () => {
-      toggleBtn.style.opacity = '0';
     });
 
     dom.appendChild(mathContainer);
