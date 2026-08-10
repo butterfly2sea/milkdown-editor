@@ -161,6 +161,10 @@ export interface Locale {
   autoSaveEnabled: string;
   autoSaveDelay: string;
   seconds: string;
+  pageMargin: string;
+  pageMarginNormal: string;
+  pageMarginNarrow: string;
+  pageMarginNone: string;
 
   // WebDAV sync
   webdavSettings: string;
@@ -333,6 +337,10 @@ export const en: Locale = {
   autoSaveEnabled: 'Auto-save',
   autoSaveDelay: 'Auto-save delay',
   seconds: 'seconds',
+  pageMargin: 'Page margin',
+  pageMarginNormal: 'Normal',
+  pageMarginNarrow: 'Narrow',
+  pageMarginNone: 'None',
   webdavSettings: 'WebDAV Sync',
   webdavServerUrl: 'Server URL',
   webdavUsername: 'Username',
@@ -501,6 +509,10 @@ export const zh: Locale = {
   autoSaveEnabled: '自动保存',
   autoSaveDelay: '自动保存延时',
   seconds: '秒',
+  pageMargin: '页边距',
+  pageMarginNormal: '正常',
+  pageMarginNarrow: '窄',
+  pageMarginNone: '无',
   webdavSettings: 'WebDAV 同步',
   webdavServerUrl: '服务器地址',
   webdavUsername: '用户名',

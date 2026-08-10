@@ -14,6 +14,7 @@ import { exportHTML } from '../file/export-html';
 
 import { i18n } from '../i18n';
 import { initPlantUMLServerFromStorage, showSettingsModal, setOnSyncConfigChange, setOnAutoSaveConfigChange } from '../settings/settings-modal';
+import { applyPageMargin } from '../settings/page-margin';
 import { getAutoSaveConfig } from '../settings/auto-save-config';
 import { SyncManager } from '../sync/sync-manager';
 import { showAboutModal } from '../about/about-modal';
@@ -57,6 +58,8 @@ export class AppCoordinator {
   i18n.init();
   // Restore PlantUML server URL from localStorage
   initPlantUMLServerFromStorage();
+  // Before the editor renders, so the text never reflows on startup.
+  applyPageMargin();
   const eventManager = new EventManager();
   // Before any UI exists: the link tooltip and the About dialog both rely on it.
   installExternalLinkHandler(eventManager);
