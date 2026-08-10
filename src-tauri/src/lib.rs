@@ -212,7 +212,10 @@ fn default_labels() -> MenuLabels {
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    open::that(&url).map_err(|e| e.to_string())
+    // Detached, not `open::that`: that variant waits for the child to exit, and
+    // on Linux `xdg-open` may exec into the browser itself — which would hold
+    // this command's thread for as long as the browser stays open.
+    open::that_detached(&url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

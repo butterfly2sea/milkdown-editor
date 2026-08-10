@@ -20,6 +20,7 @@ import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import { highlightSelectionMatches } from '@codemirror/search';
 import { multiCursorSupport } from './cm-multi-cursor';
 import { cmSearchHighlight } from './cm-search-highlight';
+import { cmLinkClick } from './cm-link-click';
 
 const MONO_STACK = "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace";
 
@@ -69,6 +70,12 @@ const themeSpec = {
     background: 'var(--cm-selection-bg)',
   },
   '.cm-selectionMatch': { backgroundColor: 'rgba(255, 213, 0, 0.25)' },
+  // Ctrl/Cmd-hovered link in `cm-link-click.ts`.
+  '.cm-md-link': {
+    textDecoration: 'underline',
+    textUnderlineOffset: '2px',
+    cursor: 'pointer',
+  },
 };
 
 // Built once each, not per theme switch: `EditorView.theme` mints a fresh class
@@ -115,6 +122,8 @@ export class SourceEditor {
       cmSearchHighlight,
       // Alt+click / Alt+drag multi-cursor plus Alt+J occurrence selection.
       multiCursorSupport,
+      // Ctrl/Cmd+click a link to open it in the system browser.
+      cmLinkClick,
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !this.applyingValue) {

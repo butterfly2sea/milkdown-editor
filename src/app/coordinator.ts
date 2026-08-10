@@ -1,6 +1,7 @@
 import { createEditor, getCursorInfo, editorUndo, editorRedo, getHeadings, scrollToPos } from '../editor/setup';
 import { SearchBar } from '../editor/search';
 import { SourceEditor } from '../editor/source-editor';
+import { installExternalLinkHandler } from '../editor/external-links';
 import { ZoomController } from '../editor/zoom';
 import { SidebarTabs } from '../sidebar/sidebar-tabs';
 import { TableOfContents } from '../sidebar/toc';
@@ -57,6 +58,8 @@ export class AppCoordinator {
   // Restore PlantUML server URL from localStorage
   initPlantUMLServerFromStorage();
   const eventManager = new EventManager();
+  // Before any UI exists: the link tooltip and the About dialog both rely on it.
+  installExternalLinkHandler(eventManager);
 
   const root = document.getElementById('editor-root');
   const titlebarEl = document.getElementById('titlebar');

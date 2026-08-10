@@ -107,6 +107,13 @@
   color: var(--accent-hover) !important;
 }
 
+/* Ctrl/Cmd held: links become clickable (see plugins/link-click.ts). */
+.milkdown .ProseMirror.link-modifier-down a[href] {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Horizontal rule */
 .milkdown hr {
   border-color: var(--border-color) !important;
