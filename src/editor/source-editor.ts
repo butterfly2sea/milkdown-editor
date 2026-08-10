@@ -25,7 +25,7 @@ const MONO_STACK = "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monosp
 
 /** Colours come from the app's CSS variables so theme switching is pure CSS —
  *  only the syntax highlight style has to be swapped at runtime. */
-const appTheme = EditorView.theme({
+const themeSpec = {
   '&': {
     height: '100%',
     fontSize: '14px',
@@ -45,29 +45,50 @@ const appTheme = EditorView.theme({
     color: 'var(--text-muted)',
     borderRight: '1px solid var(--border-subtle)',
   },
-  '.cm-activeLine': { backgroundColor: 'var(--bg-secondary)' },
+  // drawSelection() paints the selection into a layer *behind* the text
+  // (z-index: -2), so an opaque line background hides it completely — which is
+  // exactly what a single-line selection is: the selected line is also the
+  // active line. Both of these have to stay translucent.
+  '.cm-activeLine': { backgroundColor: 'var(--cm-active-line-bg)' },
   '.cm-activeLineGutter': {
-    backgroundColor: 'var(--bg-secondary)',
+    backgroundColor: 'var(--cm-active-line-bg)',
     color: 'var(--text-secondary)',
   },
   // drawSelection() renders selections itself, so the native ::selection colour
   // is never used for the primary selection — but it still is for the extra
   // ranges the browser paints during a native drag.
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, & ::selection': {
-    backgroundColor: 'var(--cm-selection-bg)',
+  //
+  // The focused case needs CodeMirror's own full selector path: its base theme
+  // ships `&light.cm-focused > .cm-scroller > .cm-selectionLayer
+  // .cm-selectionBackground`, which outweighs anything shorter and would
+  // otherwise win with its stock lilac.
+  '.cm-selectionBackground, & ::selection': {
+    background: 'var(--cm-selection-bg)',
+  },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+    background: 'var(--cm-selection-bg)',
   },
   '.cm-selectionMatch': { backgroundColor: 'rgba(255, 213, 0, 0.25)' },
-});
+};
+
+// Built once each, not per theme switch: `EditorView.theme` mints a fresh class
+// name on every call, and those accumulate in the document's stylesheet.
+const lightTheme = EditorView.theme(themeSpec, { dark: false });
+const darkTheme = EditorView.theme(themeSpec, { dark: true });
 
 const isDarkTheme = () => document.documentElement.getAttribute('data-theme') === 'dark';
 
-const highlightFor = (dark: boolean): Extension =>
-  syntaxHighlighting(dark ? oneDarkHighlightStyle : defaultHighlightStyle, { fallback: true });
+/** The theme has to be swapped along with the highlight style so CodeMirror's
+ *  own `&dark` base rules match the app's theme. */
+const appearanceFor = (dark: boolean): Extension => [
+  dark ? darkTheme : lightTheme,
+  syntaxHighlighting(dark ? oneDarkHighlightStyle : defaultHighlightStyle, { fallback: true }),
+];
 
 export class SourceEditor {
   private wrapper: HTMLElement;
   private editorView: EditorView;
-  private highlightCompartment = new Compartment();
+  private appearanceCompartment = new Compartment();
   private themeObserver: MutationObserver;
   /** Guards the update listener while `value` is assigned programmatically, so
    *  loading a file does not look like the user typing. */
@@ -89,10 +110,9 @@ export class SourceEditor {
       indentOnInput(),
       EditorView.lineWrapping,
       markdown(),
-      this.highlightCompartment.of(highlightFor(isDarkTheme())),
+      this.appearanceCompartment.of(appearanceFor(isDarkTheme())),
       highlightSelectionMatches(),
       cmSearchHighlight,
-      appTheme,
       // Alt+click / Alt+drag multi-cursor plus Alt+J occurrence selection.
       multiCursorSupport,
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
@@ -110,7 +130,7 @@ export class SourceEditor {
 
     this.themeObserver = new MutationObserver(() => {
       this.editorView.dispatch({
-        effects: this.highlightCompartment.reconfigure(highlightFor(isDarkTheme())),
+        effects: this.appearanceCompartment.reconfigure(appearanceFor(isDarkTheme())),
       });
     });
     this.themeObserver.observe(document.documentElement, {
