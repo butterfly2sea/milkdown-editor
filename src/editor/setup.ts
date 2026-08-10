@@ -19,6 +19,7 @@ import { configureMarkdownStringify, installMarkdownNormalizer } from './markdow
 import { preserveSourceBlocks } from './source-preserve';
 import { codeBlockMultiCursorExtensions } from './cm-multi-cursor';
 import { createMultiCursorPlugin } from './plugins/multi-cursor';
+import { createLinkClickPlugin } from './plugins/link-click';
 import type { ImageStorageMode } from './image-storage';
 
 export interface EditorInstance {
@@ -86,6 +87,7 @@ export async function createEditor(
   const { $prose } = await import('@milkdown/kit/utils');
   crepe.editor.use($prose(() => createSearchPlugin()));
   crepe.editor.use($prose(() => createClipboardContextMenuPlugin()));
+  crepe.editor.use($prose(() => createLinkClickPlugin()));
   crepe.editor.use($prose(() => createImagePasteDropPlugin(
     getCurrentFilePath,
     getImageStorageMode,

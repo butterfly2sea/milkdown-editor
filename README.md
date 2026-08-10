@@ -24,6 +24,8 @@ A Typora-like WYSIWYG Markdown editor built with [Milkdown](https://milkdown.dev
 
 * **Highlight** — `==highlight==` marks, toggled from the selection toolbar (pure Markdown, no HTML)
 
+* **External Links** — `Ctrl`+click any link to open it in your default browser, scheme optional
+
 * **Editor Zoom** — Zoom the editing area with `Ctrl`+scroll or `Ctrl`+`]` / `[` / `0`
 
 * **Flexible Image Storage** — Keep images as Base64, online URLs, or relative files in a `<name>.assets/` folder
@@ -53,6 +55,12 @@ Type Markdown and it renders as you go: `# `…`###### ` for headings, `- ` / `1
 ### Highlight
 
 Type `==text==`, or select text and click the highlight button in the selection toolbar. Stored as pure Markdown `==text==` — no HTML is written to the file.
+
+### Opening Links
+
+* `Ctrl`+click (`Cmd`+click on macOS) any link to open it in your default browser. Works in both WYSIWYG and source mode.
+* A plain click on a link pops up its address; clicking that address opens the browser too.
+* The scheme may be left out — `[百度](www.baidu.com)` opens as `https://www.baidu.com`. Document-relative links such as `README.md` or `./docs/api.md` stay in the editor.
 
 ### Find & Replace
 
@@ -148,6 +156,7 @@ Then set the default app again with `Cmd+I`.
 | Bold / Italic           | `Ctrl+B` / `Ctrl+I`                               |
 | Highlight / Strike      | `Ctrl+Shift+H` / `Ctrl+Shift+X`                   |
 | Inline code / Link      | `Ctrl+Shift+K` / `Ctrl+K`                         |
+| Open link in browser    | `Ctrl`+click (or click the address in the popup)  |
 | Zoom in / out / reset   | `Ctrl+]` / `Ctrl+[` / `Ctrl+0` (or `Ctrl`+scroll) |
 | Localize images         | `Ctrl+Alt+I`                                      |
 | Toggle sidebar / theme  | `Ctrl+\` / `Ctrl+/`                               |
