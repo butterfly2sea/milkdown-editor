@@ -539,6 +539,31 @@
   overflow-wrap: break-word;
 }
 
+/* Page margin (Settings → Editor). `normal` is Crepe's own 120px gutter plus
+   #editor-root's padding and needs no rule; the other two levels only touch the
+   horizontal padding, since the vertical padding is what keeps the first line
+   clear of the toolbar. #editor-root is shrunk alongside the editor surface so
+   the setting reaches source mode too, which has no padding of its own.
+
+   The floor is 84px, not 0: Crepe draws the block handle (insert + drag) 82px
+   to the left of the block it belongs to, and #editor-root clips anything that
+   lands outside it — a thinner gutter cuts the handle in half or hides it
+   outright. `none` therefore means "as narrow as the handle allows". */
+[data-page-margin='narrow'] #editor-root {
+  padding-left: clamp(8px, 2vw, 24px);
+  padding-right: clamp(8px, 2vw, 24px);
+}
+[data-page-margin='narrow'] #editor-root .milkdown .ProseMirror {
+  padding-left: 96px;
+  padding-right: 96px;
+}
+
+[data-page-margin='none'] #editor-root { padding-left: 0; padding-right: 0; }
+[data-page-margin='none'] #editor-root .milkdown .ProseMirror {
+  padding-left: 84px;
+  padding-right: 84px;
+}
+
 /* Multi-cursor (Alt+click / Alt+drag / Alt+J).
    ProseMirror paints only the primary cursor natively; every secondary one is
    drawn here from plugin decorations. */

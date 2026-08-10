@@ -1,7 +1,7 @@
 import { getPlantUMLServer, setPlantUMLServer } from '../editor/plugins/plantuml-plugin';
 import { getSyncConfig, saveSyncConfig, type SyncConfig } from '../sync/sync-config';
 import { WebDAVClient } from '../sync/webdav-client';
-import { AUTO_SAVE_DELAYS, getAutoSaveConfig, saveAutoSaveConfig } from './auto-save-config';
+import { buildEditorSection } from './editor-section';
 import { i18n } from '../i18n';
 
 const STORAGE_KEY = 'plantuml-server-url';
@@ -135,46 +135,7 @@ export function showSettingsModal(): void {
   // -- Editor section --
   startSection(i18n.t.editorSettings);
 
-  const autoSaveConfig = getAutoSaveConfig();
-
-  const autoSaveRow = document.createElement('div');
-  autoSaveRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
-  const autoSaveCheckbox = document.createElement('input');
-  autoSaveCheckbox.type = 'checkbox';
-  autoSaveCheckbox.checked = autoSaveConfig.enabled;
-  const autoSaveLabel = document.createElement('span');
-  autoSaveLabel.textContent = i18n.t.autoSaveEnabled;
-  autoSaveLabel.style.cssText = 'font-size: 13px; color: var(--text-primary, #333);';
-  autoSaveRow.appendChild(autoSaveCheckbox);
-  autoSaveRow.appendChild(autoSaveLabel);
-  modal.appendChild(autoSaveRow);
-
-  const autoSaveDelayLabel = document.createElement('label');
-  autoSaveDelayLabel.textContent = i18n.t.autoSaveDelay;
-  autoSaveDelayLabel.style.cssText = fieldLabelStyle;
-  modal.appendChild(autoSaveDelayLabel);
-
-  const autoSaveDelaySelect = document.createElement('select');
-  autoSaveDelaySelect.style.cssText = inputStyle;
-  for (const secs of AUTO_SAVE_DELAYS) {
-    const opt = document.createElement('option');
-    opt.value = String(secs);
-    opt.textContent = `${secs} ${i18n.t.seconds}`;
-    if (autoSaveConfig.delaySeconds === secs) opt.selected = true;
-    autoSaveDelaySelect.appendChild(opt);
-  }
-  modal.appendChild(autoSaveDelaySelect);
-
-  // The delay is meaningless while auto-save is off; grey it out rather than
-  // let it look like it still applies.
-  const updateAutoSaveDelayState = () => {
-    const off = !autoSaveCheckbox.checked;
-    autoSaveDelaySelect.disabled = off;
-    autoSaveDelaySelect.style.opacity = off ? '0.5' : '1';
-    autoSaveDelayLabel.style.opacity = off ? '0.5' : '1';
-  };
-  autoSaveCheckbox.addEventListener('change', updateAutoSaveDelayState);
-  updateAutoSaveDelayState();
+  const editorSection = buildEditorSection(modal, { input: inputStyle, label: fieldLabelStyle });
 
   // -- WebDAV Sync section --
   startSection(i18n.t.webdavSettings);
@@ -308,11 +269,8 @@ export function showSettingsModal(): void {
       localStorage.removeItem(STORAGE_KEY);
     }
 
-    // Save auto-save settings
-    saveAutoSaveConfig({
-      enabled: autoSaveCheckbox.checked,
-      delaySeconds: parseInt(autoSaveDelaySelect.value) || AUTO_SAVE_DELAYS[0],
-    });
+    // Save editor settings (auto-save, page margin)
+    editorSection.save();
     _onAutoSaveConfigChange?.();
 
     // Save WebDAV settings
