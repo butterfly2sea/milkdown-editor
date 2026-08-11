@@ -40,6 +40,9 @@ export interface Locale {
   // Sidebar
   newFileMenu: string;
 
+  // Clipboard
+  copyFailed: string;
+
   // PlantUML
   plantumlPlaceholder: string;
   plantumlPreviewTitle: string;
@@ -237,6 +240,7 @@ export const en: Locale = {
   mathLoadFailed: 'Failed to load math editor',
   remoteRefreshFailed: 'Failed to refresh remote files',
   newFileMenu: 'New File',
+  copyFailed: 'Copy failed',
   plantumlPlaceholder: 'Enter PlantUML code to preview',
   plantumlPreviewTitle: 'Click to edit, right-click to copy',
   plantumlSourcePlaceholder: '@startuml\nAlice -> Bob: Hello\n@enduml',
@@ -409,6 +413,7 @@ export const zh: Locale = {
   mathLoadFailed: '加载数学公式编辑器失败',
   remoteRefreshFailed: '刷新远程文件失败',
   newFileMenu: '新建文件',
+  copyFailed: '复制失败',
   plantumlPlaceholder: '输入 PlantUML 代码以预览',
   plantumlPreviewTitle: '点击编辑，右键复制',
   plantumlSourcePlaceholder: '@startuml\nAlice -> Bob: Hello\n@enduml',

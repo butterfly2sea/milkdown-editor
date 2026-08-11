@@ -21,6 +21,7 @@ import { codeBlockMultiCursorExtensions } from './cm-multi-cursor';
 import { createMultiCursorPlugin } from './plugins/multi-cursor';
 import { createLinkClickPlugin } from './plugins/link-click';
 import type { ImageStorageMode } from './image-storage';
+import { markCodeBlockCopied, trackCodeBlockCopyClicks } from './code-block-copy';
 
 export interface EditorInstance {
   crepe: Crepe;
@@ -43,6 +44,7 @@ export async function createEditor(
   getImageStorageMode: () => ImageStorageMode = () => 'local',
   onUrlUploadRequired: () => void = () => undefined,
 ): Promise<EditorInstance> {
+  trackCodeBlockCopyClicks();
   const frontmatter = createFrontmatterCard();
   const { yaml: initYaml, body: initBody } = splitFrontmatter(defaultValue);
   frontmatter.setYaml(initYaml);
@@ -60,7 +62,12 @@ export async function createEditor(
         getImageStorageMode,
         onUrlUploadRequired,
       ),
-      [CrepeFeature.CodeMirror]: { extensions: codeBlockMultiCursorExtensions },
+      [CrepeFeature.CodeMirror]: {
+        extensions: codeBlockMultiCursorExtensions,
+        // The button gives no feedback of its own, so a successful copy used to
+        // look exactly like the broken one.
+        onCopy: markCodeBlockCopied,
+      },
     },
   });
 

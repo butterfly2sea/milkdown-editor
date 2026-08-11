@@ -20,6 +20,7 @@ import { SyncManager } from '../sync/sync-manager';
 import { showAboutModal } from '../about/about-modal';
 import { MenuEvents, type MenuEvent } from '../types/menu-events';
 import { EventManager } from '../utils/event-manager';
+import { installClipboardFallback } from '../utils/clipboard';
 import { ShortcutManager } from './shortcut-manager';
 import { AppStore } from './store';
 import { toast } from '../ui/toast';
@@ -61,6 +62,9 @@ export class AppCoordinator {
   // Before the editor renders, so the text never reflows on startup.
   applyPageMargin();
   const eventManager = new EventManager();
+  // Before the editor exists: milkdown's code block copy button reads
+  // `navigator.clipboard` when it is constructed with the code block.
+  installClipboardFallback(() => toast(i18n.t.copyFailed, 'error'));
   // Before any UI exists: the link tooltip and the About dialog both rely on it.
   installExternalLinkHandler(eventManager);
 
