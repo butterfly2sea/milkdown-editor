@@ -18,6 +18,11 @@ export interface Locale {
   docOpenInAnotherWindow: string;
   revealNoFile: string;
   revealFailed: string;
+
+  // Document navigation
+  navBack: string;
+  navForward: string;
+
   fileName: string;
   newFile: string;
   newFolder: string;
@@ -225,6 +230,8 @@ export const en: Locale = {
   docOpenInAnotherWindow: 'This document is already open in another window; switched to it.',
   revealNoFile: 'Save the document first — it has no folder yet.',
   revealFailed: 'Could not open the file manager.',
+  navBack: 'Back (Alt+←)',
+  navForward: 'Forward (Alt+→)',
   fileName: 'File name:',
   newFile: 'New File',
   newFolder: 'New Folder',
@@ -400,6 +407,8 @@ export const zh: Locale = {
   docOpenInAnotherWindow: '该文档已在另一个窗口中打开，已切换过去。',
   revealNoFile: '请先保存文档——它还没有所在文件夹。',
   revealFailed: '无法打开文件管理器。',
+  navBack: '后退（Alt+←）',
+  navForward: '前进（Alt+→）',
   fileName: '文件名：',
   newFile: '新建文件',
   newFolder: '新建文件夹',
