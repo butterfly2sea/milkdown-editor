@@ -62,7 +62,25 @@ Type `==text==`, or select text and click the highlight button in the selection 
 
 * `Ctrl`+click (`Cmd`+click on macOS) any link to open it in your default browser. Works in both WYSIWYG and source mode.
 * A plain click on a link pops up its address; clicking that address opens the browser too.
-* The scheme may be left out — `[百度](www.baidu.com)` opens as `https://www.baidu.com`. Document-relative links such as `README.md` or `./docs/api.md` stay in the editor.
+* The scheme may be left out — `[百度](www.baidu.com)` opens as `https://www.baidu.com`.
+
+### Following Document Links
+
+Links that point next to the document rather than out at the web are followed inside the editor, with the same `Ctrl`+click (or click on the address in the popup):
+
+* `./notes.md`, `../design/api.md`, `/abs/path/readme.md` — opens that file. The `.md` may be left off: `[design](./design)` finds `design.md`.
+* `#section-title` — scrolls to that heading in the current document. GitHub-style slugs and the plain heading text both work, so `#My Heading` and `#my-heading` land in the same place.
+* `./notes.md#section` — opens the file *and* lands on the heading.
+* `./report.pdf`, `./chart.png` — handed to whatever program your system opens them with.
+
+If the file or the heading does not exist, a notice appears and nothing moves.
+
+### Back & Forward
+
+Every document switch — a link jump, a click in the file tree, `Ctrl+O` — is remembered, so you can retrace your steps and land back at the scroll position you left:
+
+* `Alt+←` / `Alt+→`, or the mouse's back / forward side buttons.
+* The `←` / `→` buttons at the left of the title bar, which appear once there is somewhere to go back to.
 
 ### Find & Replace
 
@@ -168,6 +186,8 @@ Then set the default app again with `Cmd+I`.
 | Highlight / Strike      | `Ctrl+Shift+H` / `Ctrl+Shift+X`                   |
 | Inline code / Link      | `Ctrl+Shift+K` / `Ctrl+K`                         |
 | Open link in browser    | `Ctrl`+click (or click the address in the popup)  |
+| Follow a document link  | `Ctrl`+click (or click the address in the popup)  |
+| Back / Forward          | `Alt+←` / `Alt+→` (or the mouse side buttons)     |
 | Zoom in / out / reset   | `Ctrl+]` / `Ctrl+[` / `Ctrl+0` (or `Ctrl`+scroll) |
 | Localize images         | `Ctrl+Alt+I`                                      |
 | Toggle sidebar / theme  | `Ctrl+\` / `Ctrl+/`                               |
