@@ -12,7 +12,6 @@ export interface Locale {
   exportHTML: string;
   exportPDF: string;
   sourceMode: string;
-  viewModeUndoWarning: string;
 
   // File operations
   unsavedWarning: string;
@@ -64,6 +63,11 @@ export interface Locale {
   // Math
   mathPlaceholder: string;
   mathToggleSource: string;
+  mathMenu: string;
+  mathVirtualKeyboard: string;
+
+  // Sidebar
+  sidebarResizeHint: string;
 
   // Frontmatter card
   frontmatterTitle: string;
@@ -217,7 +221,6 @@ export const en: Locale = {
   exportHTML: 'Export HTML',
   exportPDF: 'Export PDF',
   sourceMode: 'Source code / WYSIWYG',
-  viewModeUndoWarning: 'Switching modes will clear undo history. Continue?',
   unsavedWarning: 'You have unsaved changes. Discard them?',
   docOpenInAnotherWindow: 'This document is already open in another window; switched to it.',
   revealNoFile: 'Save the document first — it has no folder yet.',
@@ -259,6 +262,9 @@ export const en: Locale = {
   mermaidDone: 'Done',
   mathPlaceholder: 'Enter LaTeX...',
   mathToggleSource: 'Toggle LaTeX source',
+  mathMenu: 'Formula menu',
+  mathVirtualKeyboard: 'Toggle virtual keyboard',
+  sidebarResizeHint: 'Drag to resize · double-click to reset',
   frontmatterTitle: 'Frontmatter',
   frontmatterUntitled: '(no name)',
   frontmatterName: 'Name',
@@ -390,7 +396,6 @@ export const zh: Locale = {
   exportHTML: '导出 HTML',
   exportPDF: '导出 PDF',
   sourceMode: '源码 / 所见即所得',
-  viewModeUndoWarning: '切换模式将清空撤销历史，是否继续？',
   unsavedWarning: '有未保存的更改，是否丢弃？',
   docOpenInAnotherWindow: '该文档已在另一个窗口中打开，已切换过去。',
   revealNoFile: '请先保存文档——它还没有所在文件夹。',
@@ -432,6 +437,9 @@ export const zh: Locale = {
   mermaidDone: '完成',
   mathPlaceholder: '输入 LaTeX...',
   mathToggleSource: '切换 LaTeX 源码',
+  mathMenu: '公式菜单',
+  mathVirtualKeyboard: '切换虚拟键盘',
+  sidebarResizeHint: '拖动调整宽度 · 双击恢复默认',
   frontmatterTitle: '元信息',
   frontmatterUntitled: '(未命名)',
   frontmatterName: '名称',

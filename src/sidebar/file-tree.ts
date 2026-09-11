@@ -3,6 +3,17 @@ import type { SyncFileStatus } from '../app/store';
 import { i18n } from '../i18n';
 import { toast } from '../ui/toast';
 
+/** The row already clips, but a flex child defaults to `min-width: auto` and so
+ *  refuses to shrink below its text — which is why long names used to run off
+ *  the edge with no ellipsis at all. The full name lives in a `title`. */
+const NAME_STYLE = `
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
 export class FileTree {
   private el: HTMLElement;
   private currentFile: string | null = null;
@@ -103,6 +114,8 @@ export class FileTree {
         const childContainer = document.createElement('div');
         const nameSpan = document.createElement('span');
         nameSpan.textContent = node.name;
+        nameSpan.title = node.name;
+        nameSpan.style.cssText = NAME_STYLE;
 
         item.appendChild(arrow);
         item.appendChild(nameSpan);
@@ -144,7 +157,8 @@ export class FileTree {
 
         const nameSpan = document.createElement('span');
         nameSpan.textContent = node.name;
-        nameSpan.style.flex = '1';
+        nameSpan.title = node.name;
+        nameSpan.style.cssText = NAME_STYLE;
 
         // Sync status icon (only shown for synced files)
         const syncIcon = document.createElement('span');

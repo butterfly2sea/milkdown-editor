@@ -4,7 +4,13 @@
 // can only ever hold a single selection, so multi-cursor and column selection
 // were physically impossible there, and the find bar had nothing to drive.
 
-import { Compartment, EditorSelection, EditorState, type Extension } from '@codemirror/state';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  Transaction,
+  type Extension,
+} from '@codemirror/state';
 import {
   EditorView,
   keymap,
@@ -96,6 +102,8 @@ export class SourceEditor {
   private wrapper: HTMLElement;
   private editorView: EditorView;
   private appearanceCompartment = new Compartment();
+  /** Only here so {@link value} can empty the undo stack; see the setter. */
+  private historyCompartment = new Compartment();
   private themeObserver: MutationObserver;
   /** Guards the update listener while `value` is assigned programmatically, so
    *  loading a file does not look like the user typing. */
@@ -112,7 +120,7 @@ export class SourceEditor {
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightActiveLine(),
-      history(),
+      this.historyCompartment.of(history()),
       dropCursor(),
       indentOnInput(),
       EditorView.lineWrapping,
@@ -160,6 +168,13 @@ export class SourceEditor {
     return this.editorView.state.doc.toString();
   }
 
+  /**
+   * Load a whole document. This is never an edit — it is the app handing the
+   * editor a different text — so it neither enters the undo stack nor leaves
+   * anything behind it reachable: one Ctrl+Z used to swap the *previous*
+   * document back in, which is the bug the "switching modes clears undo
+   * history" warning was papering over.
+   */
   set value(next: string) {
     if (next === this.value) return;
     this.applyingValue = true;
@@ -167,7 +182,13 @@ export class SourceEditor {
       this.editorView.dispatch({
         changes: { from: 0, to: this.editorView.state.doc.length, insert: next },
         selection: EditorSelection.single(0),
+        annotations: Transaction.addToHistory.of(false),
       });
+      // `history()` is backed by a module-level StateField, so handing the
+      // compartment a fresh `history()` reuses the same (still populated)
+      // field. Dropping the extension is what actually discards the stack.
+      this.editorView.dispatch({ effects: this.historyCompartment.reconfigure([]) });
+      this.editorView.dispatch({ effects: this.historyCompartment.reconfigure(history()) });
     } finally {
       this.applyingValue = false;
     }

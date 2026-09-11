@@ -4,6 +4,7 @@ import { SourceEditor } from '../editor/source-editor';
 import { installExternalLinkHandler } from '../editor/external-links';
 import { ZoomController } from '../editor/zoom';
 import { SidebarTabs } from '../sidebar/sidebar-tabs';
+import { installSidebarResize } from '../sidebar/sidebar-resize';
 import { TableOfContents } from '../sidebar/toc';
 import { RemoteFileTree } from '../sidebar/remote-tree';
 import { TitleBar } from '../titlebar/titlebar';
@@ -120,6 +121,9 @@ export class AppCoordinator {
 
   // Initialize sidebar tabs first, then create FileTree inside the files container
   const sidebarTabs = new SidebarTabs(sidebarEl);
+  // After the tabs: their constructor moves every existing child of #sidebar
+  // into the files panel, which would swallow the drag handle.
+  installSidebarResize(sidebarEl);
   const fileTree = new FileTree(sidebarTabs.filesEl);
   // Without a folder the tree has nothing to show, so the tab would only offer
   // a blank panel. It comes back the moment a folder is opened.
@@ -620,21 +624,25 @@ export class AppCoordinator {
 
   statusBar.onViewModeToggle = (mode) => {
     if (imageStorageConversionBusy()) return false;
-    if (!confirm(i18n.t.viewModeUndoWarning)) return false;
 
     const editorDiv = root.querySelector('.milkdown') as HTMLElement || root.firstElementChild as HTMLElement;
     if (mode === 'source') {
-      // Switch to source mode
+      // Switch to source mode. The WYSIWYG document is untouched, so its undo
+      // stack stays valid and is still there on the way back; the source
+      // editor starts a fresh one (see `SourceEditor`'s `value` setter).
       sourceEditor.value = editor.getMarkdown();
       if (editorDiv) editorDiv.style.display = 'none';
       sourceEditor.show();
       sourceEditor.focus();
     } else {
-      // Switch back to WYSIWYG
+      // Switch back to WYSIWYG. The text may have been edited, so it is folded
+      // into the undo stack as one step instead of replacing the document
+      // behind history's back. Skipped when nothing changed, which would
+      // otherwise leave a Ctrl+Z that visibly does nothing.
       const md = sourceEditor.value;
       sourceEditor.hide();
       if (editorDiv) editorDiv.style.display = '';
-      editor.setMarkdown(md);
+      if (md !== editor.getMarkdown()) editor.setMarkdown(md, { addToHistory: true });
       updateImageStorageState(detectImageStorageState(editor.crepe) ?? imageStorageState);
     }
     searchBar.setTarget(mode === 'source' ? 'source' : 'wysiwyg');

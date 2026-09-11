@@ -1,11 +1,15 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { editorViewCtx, parserCtx, remarkCtx } from '@milkdown/kit/core';
+import { blockConfig } from '@milkdown/kit/plugin/block';
+import type { Ctx } from '@milkdown/kit/ctx';
 import type { RemarkParser } from '@milkdown/kit/transformer';
 import { undo as pmUndo, redo as pmRedo } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { Slice } from 'prosemirror-model';
 import { mathPlugins } from './plugins/math-plugin';
+import { preloadMathLive } from './plugins/math-node-view';
+import { buildMathMenu } from './plugins/math-insert';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
 import { mermaidPlugins } from './plugins/mermaid-plugin';
 import { highlightPlugins } from './plugins/highlight-plugin';
@@ -26,7 +30,10 @@ import { markCodeBlockCopied, trackCodeBlockCopyClicks } from './code-block-copy
 export interface EditorInstance {
   crepe: Crepe;
   getMarkdown: () => string;
-  setMarkdown: (md: string) => void;
+  /** `addToHistory` turns the replacement into an ordinary undoable step, for
+   *  callers that are handing back an edited version of the *same* document
+   *  (source mode) rather than loading a different one. */
+  setMarkdown: (md: string, options?: { addToHistory?: boolean }) => void;
   /** `generated` with every block that still means what it did in `original`
    *  restored to the text `original` spells it with. See
    *  {@link preserveSourceBlocks}. */
@@ -35,6 +42,31 @@ export interface EditorInstance {
 }
 
 export type ChangeCallback = (markdown: string) => void;
+
+/**
+ * Keep the block handle (the `+` and the six dots) pinned to the start of the
+ * line.
+ *
+ * `selectRootNodeByDom` resolves the node under the pointer and only walks up
+ * to its block parent when `filterNodes` rejects it. Crepe's own filter uses
+ * `findParent`, which inspects *ancestors* only — so when the probe lands on an
+ * inline atom such as `math_inline` the filter accepts it and the handle
+ * anchors mid-line. Rejecting inline nodes outright sends the lookup back up to
+ * the real block. Applied after `crepe.create()` on purpose: the plugin reads
+ * this ctx value fresh on every mousemove, so a later override still wins.
+ */
+function fixBlockHandleAnchor(ctx: Ctx): void {
+  ctx.set(blockConfig.key, {
+    filterNodes: (pos, node) => {
+      for (let depth = pos.depth; depth > 0; depth--) {
+        const name = pos.node(depth).type.name;
+        if (name === 'table' || name === 'blockquote') return false;
+      }
+      if (node?.isInline || node?.isText) return false;
+      return true;
+    },
+  });
+}
 
 export async function createEditor(
   root: HTMLElement,
@@ -57,6 +89,7 @@ export async function createEditor(
     },
     featureConfigs: {
       [CrepeFeature.Toolbar]: clipboardToolbarConfig,
+      [CrepeFeature.BlockEdit]: { buildMenu: buildMathMenu },
       [CrepeFeature.ImageBlock]: buildImageBlockConfig(
         getCurrentFilePath,
         getImageStorageMode,
@@ -106,6 +139,11 @@ export async function createEditor(
 
   await crepe.create();
   crepe.editor.action(installMarkdownNormalizer);
+  crepe.editor.action(fixBlockHandleAnchor);
+  // Warm the MathLive chunk up front: a formula node view can only grab the
+  // caret synchronously once the constructor is in memory, and otherwise the
+  // keystroke right after `$x$` types over the formula it just created.
+  void preloadMathLive();
   frontmatter.mount(root);
   frontmatter.onChange(() => onChange?.(compose()));
 
@@ -126,7 +164,7 @@ export async function createEditor(
     });
   };
 
-  const setMarkdown = (md: string): void => {
+  const setMarkdown = (md: string, options?: { addToHistory?: boolean }): void => {
     const { yaml, body } = splitFrontmatter(md);
     frontmatter.setYaml(yaml);
     crepe.editor.action((ctx) => {
@@ -138,7 +176,11 @@ export async function createEditor(
         0, view.state.doc.content.size,
         new Slice(doc.content, 0, 0)
       );
-      tr.setMeta('addToHistory', false);
+      // Loading a different document is not an edit. Coming back from source
+      // mode is: recording it keeps the undo stack a single consistent
+      // timeline, so Ctrl+Z steps back over the source-mode edits and then on
+      // into whatever was typed here before the switch.
+      if (!options?.addToHistory) tr.setMeta('addToHistory', false);
       view.dispatch(tr);
     });
   };

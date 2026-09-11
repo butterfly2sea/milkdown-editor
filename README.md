@@ -85,7 +85,9 @@ Available in the WYSIWYG editor, in source mode, and inside code blocks:
 
 ### Math
 
-Write `$inline$` or `$$block$$` math. Click a formula to edit it visually (MathLive) and toggle to LaTeX source.
+Write `$inline$` or `$$block$$` math — in any order, so typing both delimiters first and filling in the middle works too. `$$` plus a space opens an empty block, and the `+` button and `/math` both offer **Math Block** and **Inline Math**.
+
+New formulas take the cursor straight away; the arrow keys walk back out. Click a formula to edit it visually (MathLive) and toggle to LaTeX source. Inside a block formula, `Enter` (or the virtual keyboard's return key) adds a row, aligned on the `=`.
 
 ### Diagrams
 
@@ -145,8 +147,8 @@ Then set the default app again with `Cmd+I`.
 
 ### Sidebar · Source Mode · Export · Theme · Language
 
-* `Ctrl+\` toggles the sidebar (file tree + document outline). The file tree tab only appears once a folder is open.
-* The **`</>`** button (status bar) switches between WYSIWYG and raw Markdown source. Source mode is a full CodeMirror 6 editor with Markdown highlighting, undo history, find & replace and multiple cursors.
+* `Ctrl+\` toggles the sidebar (file tree + document outline). The file tree tab only appears once a folder is open. Drag its right edge to resize it (the width is remembered); double-click that edge to reset. Long names are truncated with the full name on hover.
+* The **`</>`** button (status bar) switches between WYSIWYG and raw Markdown source. Source mode is a full CodeMirror 6 editor with Markdown highlighting, undo history, find & replace and multiple cursors. Switching modes keeps your undo history, so `Ctrl+Z` still reaches edits made before the switch.
 * The **Export** button exports to HTML with embedded styles; `Ctrl+Shift+E` opens the export menu.
 * `Ctrl+/` or the sun/moon button toggles light / dark theme; the **EN/ZH** button switches language.
 

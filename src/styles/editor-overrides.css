@@ -192,6 +192,15 @@
   z-index: 10;
 }
 
+/* MathLive draws its own tooltips as a grey bubble at `top: calc(-100% - 4px)`
+ * — directly over the formula the buttons sit above. The descriptions come back
+ * as native `title`s (set in math-node-view.ts), which appear below the cursor
+ * and only after a delay, so they never mask what is being edited. */
+.math-wrapper math-field::part(menu-toggle)::after,
+.math-wrapper math-field::part(virtual-keyboard-toggle)::after {
+  display: none !important;
+}
+
 .math-wrapper math-field::part(menu-toggle) {
   right: var(--math-tool-menu-right);
 }
