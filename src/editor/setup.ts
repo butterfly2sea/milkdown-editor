@@ -6,6 +6,7 @@ import { undo as pmUndo, redo as pmRedo } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { Slice } from 'prosemirror-model';
 import { mathPlugins } from './plugins/math-plugin';
+import { preloadMathLive } from './plugins/math-node-view';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
 import { mermaidPlugins } from './plugins/mermaid-plugin';
 import { highlightPlugins } from './plugins/highlight-plugin';
@@ -106,6 +107,10 @@ export async function createEditor(
 
   await crepe.create();
   crepe.editor.action(installMarkdownNormalizer);
+  // Warm the MathLive chunk up front: a formula node view can only grab the
+  // caret synchronously once the constructor is in memory, and otherwise the
+  // keystroke right after `$x$` types over the formula it just created.
+  void preloadMathLive();
   frontmatter.mount(root);
   frontmatter.onChange(() => onChange?.(compose()));
 
