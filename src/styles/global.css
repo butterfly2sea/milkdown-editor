@@ -77,6 +77,7 @@ html, body {
 }
 
 #titlebar {
+  position: relative; /* anchors .titlebar-nav */
   height: 36px;
   background: var(--titlebar-bg);
   border-bottom: 1px solid var(--border-color);
@@ -87,6 +88,45 @@ html, body {
   -webkit-app-region: drag;
   user-select: none;
   transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* Back / forward. Taken out of the flow so the file name stays centred on the
+   window rather than being pushed off by the width of the buttons. */
+.titlebar-nav {
+  position: absolute;
+  left: 8px;
+  display: flex;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-nav.hidden {
+  visibility: hidden;
+}
+
+.titlebar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.titlebar-nav-btn:hover:not(:disabled) {
+  background: var(--sidebar-hover);
+  color: var(--text-primary);
+}
+
+.titlebar-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 #workspace {
@@ -169,6 +209,12 @@ html, body {
 /* macOS: titlebar overlay — add padding for traffic lights */
 body.platform-macos #titlebar {
   padding-left: 78px; /* space for red/yellow/green buttons */
+}
+
+/* Clear of the traffic lights, which the padding above only moves the centred
+   content past — .titlebar-nav is positioned, so it needs its own offset. */
+body.platform-macos .titlebar-nav {
+  left: 86px;
 }
 
 body.platform-macos #editor-root {

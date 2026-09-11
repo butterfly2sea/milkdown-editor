@@ -64,6 +64,22 @@ export function canOpen(url: string): boolean {
   return normalizeUrl(url) !== null;
 }
 
+/** Whether this href points at something sitting next to the document rather
+ *  than out at the web: `./other.md`, `../图/a.png`, `/abs/notes.md`, `README.md`,
+ *  `#section`.
+ *
+ *  Exactly the complement of {@link normalizeUrl}'s accept set, minus the cases
+ *  that name no document at all: an empty href, a bare `?query`, and the lone
+ *  `#` that UI code uses to make an `<a>` behave like a button. See
+ *  `doc-link.ts` for what is then done with one. */
+export function isDocLink(raw: string): boolean {
+  const url = raw.trim();
+  if (!url || url === '#' || url.startsWith('?')) return false;
+  // Covers `https:` as well, so an openable URL never reaches the check below.
+  if (HAS_SCHEME.test(url)) return false;
+  return normalizeUrl(url) === null;
+}
+
 /** Hand the URL to the OS. Falls back to a normal window open outside Tauri,
  *  which is what the dev server in a browser gets.
  *
@@ -86,6 +102,24 @@ export async function openExternalUrl(url: string): Promise<void> {
     }
   }
   window.open(target, '_blank', 'noopener,noreferrer');
+}
+
+/** Hand a local file to whatever program the OS opens it with — a PDF, an
+ *  image, a spreadsheet linked from the document.
+ *
+ *  Only the desktop build can do this; a browser has no such power, and the
+ *  caller gets a `false` to report rather than a silent no-op. */
+export async function openLocalPath(path: string): Promise<boolean> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    // The same command as `openExternalUrl`: on the Rust side it is
+    // `open::that_detached`, which is just as happy with a filesystem path.
+    await invoke('open_url', { url: path });
+    return true;
+  } catch (err) {
+    console.error('[link] open_url failed:', err);
+    return false;
+  }
 }
 
 /** Strip `<...>` wrappers and trailing sentence punctuation off a raw URL. */
@@ -127,9 +161,13 @@ const REF_DEFINITION = /^[ \t]{0,3}\[[^\]]+\]:[ \t]*(<[^>]+>|\S+)/;
 // excluded so `见https://a.com的说明` does not swallow the rest of the sentence.
 const BARE_URL = /(?:https?:\/\/|mailto:)[^\s<>[\]{}"'`　-〿一-鿿＀-￯]+/g;
 
-/** Every openable link in one line of Markdown, as offsets into that line.
+/** Every followable link in one line of Markdown, as offsets into that line.
  *  The span covers the whole construct (`[text](url)`, not just the URL) so
- *  clicking the label works the way it does in an editor's preview. */
+ *  clicking the label works the way it does in an editor's preview.
+ *
+ *  "Followable" is both kinds: a URL for the browser and a link to a document
+ *  next door. Source mode has no `<a>` elements, so this is the only thing that
+ *  tells it a stretch of text is clickable at all. */
 export function findLinksInLine(text: string): LinkSpan[] {
   const spans: LinkSpan[] = [];
   const covered: Array<[number, number]> = [];
@@ -139,7 +177,7 @@ export function findLinksInLine(text: string): LinkSpan[] {
   const add = (from: number, to: number, raw: string) => {
     const url = cleanUrl(raw);
     covered.push([from, to]);
-    if (canOpen(url)) spans.push({ from, to, url });
+    if (canOpen(url) || isDocLink(url)) spans.push({ from, to, url });
   };
 
   const ref = REF_DEFINITION.exec(text);

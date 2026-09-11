@@ -12,6 +12,15 @@ export interface KeymapHandlers {
   zoomOut?: () => void;
   zoomReset?: () => void;
   localizeImages?: () => void;
+  navBack?: () => void;
+  navForward?: () => void;
+}
+
+/** Whether the event landed in text the user is editing. Only macOS cares:
+ *  there Option+←/→ is the system's move-by-word, and a text editor has the
+ *  better claim on it than document navigation does. */
+function inTextEditor(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest('.cm-editor, .ProseMirror, input, textarea');
 }
 
 export function registerKeymap(handlers: KeymapHandlers): () => void {
@@ -57,6 +66,14 @@ export function registerKeymap(handlers: KeymapHandlers): () => void {
     } else if (ctrl && e.altKey && e.code === 'KeyI') {
       e.preventDefault();
       handlers.localizeImages?.();
+    } else if (
+      e.altKey && !ctrl && !e.shiftKey &&
+      (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+    ) {
+      if (document.body.classList.contains('platform-macos') && inTextEditor(e.target)) return;
+      e.preventDefault();
+      if (e.key === 'ArrowLeft') handlers.navBack?.();
+      else handlers.navForward?.();
     }
   };
 
