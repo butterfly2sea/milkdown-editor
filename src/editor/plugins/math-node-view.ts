@@ -231,6 +231,20 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
      *  built, or not yet mounted, so the wish outlives any single `focus()`. */
     let wantFocus = false;
 
+    /** MathLive's own tooltips are grey bubbles drawn above the button, right
+     *  on top of the formula being edited. editor-overrides.css hides them; the
+     *  descriptions come back as native `title`s, which appear below the cursor
+     *  and only after a delay. Re-applied on hover because MathLive rebuilds
+     *  the markup on its own schedule. */
+    function applyNativeTitles() {
+      const shadow = mathField?.shadowRoot;
+      if (!shadow) return;
+      shadow.querySelector('[part=menu-toggle]')?.setAttribute('title', i18n.t.mathMenu);
+      shadow
+        .querySelector('[part=virtual-keyboard-toggle]')
+        ?.setAttribute('title', i18n.t.mathVirtualKeyboard);
+    }
+
     /** `addRowAfter` seeds new cells with `\placeholder{}`, which must never
      *  reach the markdown. Read the cleaned value, but leave `mathField.value`
      *  alone — assigning to it would reset the caret mid-edit. */
@@ -332,8 +346,10 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
       // `focus()` before this point is silently dropped: MathLive waits for an
       // IntersectionObserver before it builds the editable interior.
       mathField.addEventListener('mount', () => {
+        applyNativeTitles();
         if (wantFocus) focusMathField();
       });
+      applyNativeTitles();
 
       mathContainer.innerHTML = '';
       mathContainer.appendChild(mathField);
@@ -355,6 +371,8 @@ export function createMathNodeView(display: 'inline' | 'block'): NodeViewConstru
         mathContainer.textContent = currentValue || '(math)';
       });
     }
+
+    dom.addEventListener('pointerenter', applyNativeTitles);
 
     function updateProseMirrorNode() {
       const pos = getPos();

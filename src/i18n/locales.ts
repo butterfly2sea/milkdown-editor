@@ -64,6 +64,8 @@ export interface Locale {
   // Math
   mathPlaceholder: string;
   mathToggleSource: string;
+  mathMenu: string;
+  mathVirtualKeyboard: string;
 
   // Frontmatter card
   frontmatterTitle: string;
@@ -259,6 +261,8 @@ export const en: Locale = {
   mermaidDone: 'Done',
   mathPlaceholder: 'Enter LaTeX...',
   mathToggleSource: 'Toggle LaTeX source',
+  mathMenu: 'Formula menu',
+  mathVirtualKeyboard: 'Toggle virtual keyboard',
   frontmatterTitle: 'Frontmatter',
   frontmatterUntitled: '(no name)',
   frontmatterName: 'Name',
@@ -432,6 +436,8 @@ export const zh: Locale = {
   mermaidDone: '完成',
   mathPlaceholder: '输入 LaTeX...',
   mathToggleSource: '切换 LaTeX 源码',
+  mathMenu: '公式菜单',
+  mathVirtualKeyboard: '切换虚拟键盘',
   frontmatterTitle: '元信息',
   frontmatterUntitled: '(未命名)',
   frontmatterName: '名称',
