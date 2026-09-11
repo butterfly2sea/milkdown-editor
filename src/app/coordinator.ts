@@ -2,6 +2,10 @@ import { createEditor, getCursorInfo, editorUndo, editorRedo, getHeadings, scrol
 import { SearchBar } from '../editor/search';
 import { SourceEditor } from '../editor/source-editor';
 import { installExternalLinkHandler } from '../editor/external-links';
+import { openLocalPath } from '../editor/link-open';
+import { findHeadingIndex, resolveDocLink, setDocLinkHandler } from '../editor/doc-link';
+import { DocHistory, type DocLocation } from './doc-history';
+import { EditorSelection } from '@codemirror/state';
 import { ZoomController } from '../editor/zoom';
 import { SidebarTabs } from '../sidebar/sidebar-tabs';
 import { installSidebarResize } from '../sidebar/sidebar-resize';
@@ -292,28 +296,195 @@ export class AppCoordinator {
     else (root.querySelector('.ProseMirror') as HTMLElement | null)?.focus();
   };
 
-  // -- File operations --
+  // -- Document navigation --
+  //
+  // Every document switch — a link followed, a file-tree click, Ctrl+O — goes
+  // through `openFile`, so that is where history is recorded and where a saved
+  // position is restored.
 
-  const openFile = async (path?: string) => {
-    if (imageStorageConversionBusy()) return;
+  const docHistory = new DocHistory();
+  docHistory.onChange = () => {
+    titleBar.setNavState(docHistory.canGoBack, docHistory.canGoForward);
+  };
 
-    const target = path ?? await fileManager.pickOpenPath();
-    if (!target) return;
+  /** Whichever element is actually scrolling the document right now. */
+  const scrollerEl = (): HTMLElement =>
+    sourceEditor.isVisible ? sourceEditor.view.scrollDOM : root;
 
-    // Already the document in this window — just put the cursor back in it
-    // rather than reloading and re-prompting about unsaved changes.
-    if (target === getCurrentFilePath()) {
-      focusEditor();
+  /** Where the reader is, in a form worth coming back to. An unsaved document
+   *  has no path, and nothing to reopen, so it is not a place at all. */
+  const captureLocation = (): DocLocation | null => {
+    const path = getCurrentFilePath();
+    return path ? { path, scrollTop: scrollerEl().scrollTop } : null;
+  };
+
+  /** Every heading in the document on screen, in order, paired with a way to
+   *  scroll to it. The two modes hold the document in completely different
+   *  shapes, so each supplies its own. */
+  const documentHeadings = (): Array<{ text: string; scrollTo: () => void }> => {
+    if (!sourceEditor.isVisible) {
+      return getHeadings(editor.crepe).map((entry) => ({
+        text: entry.text,
+        scrollTo: () => scrollToPos(editor.crepe, entry.pos),
+      }));
+    }
+    const found: Array<{ text: string; scrollTo: () => void }> = [];
+    let inFence = false;
+    sourceEditor.value.split('\n').forEach((text, index) => {
+      // `# comment` inside a shell snippet is not a heading, and in a document
+      // full of them the first false match would send the jump nowhere near.
+      if (/^\s*(?:```|~~~)/.test(text)) inFence = !inFence;
+      if (inFence) return;
+      const heading = /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(text);
+      if (!heading) return;
+      const line = index + 1;
+      found.push({
+        text: heading[1],
+        scrollTo: () => {
+          const view = sourceEditor.view;
+          const pos = view.state.doc.line(line).from;
+          view.dispatch({ selection: EditorSelection.single(pos), scrollIntoView: true });
+          view.focus();
+        },
+      });
+    });
+    return found;
+  };
+
+  /** @returns false when no heading answers to that name. */
+  const jumpToAnchor = (anchor: string): boolean => {
+    const headings = documentHeadings();
+    const index = findHeadingIndex(headings.map((h) => h.text), anchor);
+    if (index === -1) return false;
+    headings[index].scrollTo();
+    return true;
+  };
+
+  /** `[设计](./design)` is ordinary Markdown for `design.md`, so an extension is
+   *  worth a second guess before reporting the link as broken.
+   *  @returns the path that exists, or null. */
+  const existingMarkdownPath = async (path: string): Promise<string | null> => {
+    // Outside Tauri there is no filesystem to ask; let the open attempt itself
+    // fail, which at least reports something.
+    if (!inTauri) return path;
+    try {
+      const { exists } = await import('@tauri-apps/plugin-fs');
+      for (const candidate of [path, `${path}.md`, `${path}.markdown`]) {
+        if (await exists(candidate)) return candidate;
+      }
+    } catch (err) {
+      console.warn('[doc-link] existence check failed:', err);
+      return path;
+    }
+    return null;
+  };
+
+  /** Follow a link that points inside the workspace: a heading in this
+   *  document, another document, or a file the OS knows how to open. */
+  const navigateToDocLink = async (href: string): Promise<void> => {
+    const target = resolveDocLink(href, getCurrentFilePath());
+    if (!target) {
+      // A relative link with no saved document to resolve it against.
+      toast(i18n.t.revealNoFile, 'warn');
       return;
     }
 
+    if (target.kind === 'anchor') {
+      const from = captureLocation();
+      if (jumpToAnchor(target.anchor)) docHistory.push(from);
+      else toast(i18n.t.docAnchorNotFound.replace('{anchor}', target.anchor), 'warn');
+      return;
+    }
+
+    if (target.kind === 'file') {
+      if (!(await openLocalPath(target.path))) {
+        toast(i18n.t.tauriFeatureUnavailable, 'warn');
+      }
+      return;
+    }
+
+    const found = await existingMarkdownPath(target.path);
+    if (!found) {
+      const name = target.path.split('/').pop() || target.path;
+      toast(i18n.t.docLinkNotFound.replace('{file}', name), 'warn');
+      return;
+    }
+    await openFile(found, { anchor: target.anchor });
+  };
+
+  setDocLinkHandler((href) => {
+    void navigateToDocLink(href);
+  });
+  eventManager.addCleanup(() => setDocLinkHandler(null));
+
+  /** Put a freshly loaded document at the position the navigation asked for.
+   *  Two frames, not one: the first lets ProseMirror lay the document out, the
+   *  second lets whatever sized itself during that layout settle — only then is
+   *  a remembered scroll offset pointing at the same text it did before. */
+  const restoreView = (anchor?: string | null, scrollTop?: number): void => {
+    if (scrollTop == null && !anchor) {
+      root.scrollTop = 0;
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (scrollTop != null) scrollerEl().scrollTop = scrollTop;
+      else if (anchor && !jumpToAnchor(anchor)) {
+        toast(i18n.t.docAnchorNotFound.replace('{anchor}', anchor), 'warn');
+      }
+    }));
+  };
+
+  interface OpenOptions {
+    /** A heading to land on once the document is loaded. */
+    anchor?: string | null;
+    /** A remembered scroll offset, for back/forward. Wins over `anchor`. */
+    scrollTop?: number;
+    /** False while replaying history, so going back does not record a step. */
+    record?: boolean;
+  }
+
+  /** `cancelled` and `failed` are not the same thing to history: a prompt the
+   *  user turned down leaves the entry exactly where it was, while a file that
+   *  has since been moved or deleted has to be dropped. */
+  type OpenResult = 'opened' | 'cancelled' | 'failed';
+
+  // -- File operations --
+
+  const openFile = async (path?: string, options?: OpenOptions): Promise<OpenResult> => {
+    if (imageStorageConversionBusy()) return 'cancelled';
+
+    const target = path ?? await fileManager.pickOpenPath();
+    if (!target) return 'cancelled';
+
+    // Captured before the prompts below, because it is the place being left.
+    const from = captureLocation();
+
+    // Already the document in this window — just put the cursor back in it
+    // rather than reloading and re-prompting about unsaved changes. An anchor
+    // still has somewhere to go: the heading is in the document on screen.
+    if (target === getCurrentFilePath()) {
+      if (options?.anchor) {
+        if (jumpToAnchor(options.anchor)) {
+          if (options.record !== false) docHistory.push(from);
+        } else {
+          toast(i18n.t.docAnchorNotFound.replace('{anchor}', options.anchor), 'warn');
+        }
+      } else {
+        focusEditor();
+      }
+      return 'opened';
+    }
+
     if (isUnsaved()) {
-      if (!confirm(i18n.t.unsavedWarning)) return;
+      if (!confirm(i18n.t.unsavedWarning)) return 'cancelled';
     }
 
     if (!(await claimDocument(target))) {
       toast(i18n.t.docOpenInAnotherWindow, 'warn');
-      return;
+      // Not `failed`: the file is perfectly fine, it is just being shown
+      // elsewhere right now, and will be reachable again once that window
+      // lets go of it.
+      return 'cancelled';
     }
 
     const previousPath = getCurrentFilePath();
@@ -324,7 +495,7 @@ export class AppCoordinator {
       void releaseDocument(target);
       console.error('[file] open failed:', fileManager.lastError);
       toast(i18n.t.fileOpenFailed, 'error');
-      return;
+      return 'failed';
     }
     if (previousPath && previousPath !== target) {
       void releaseDocument(previousPath);
@@ -339,11 +510,60 @@ export class AppCoordinator {
     // keep showing (and, on save, write back) the previous file.
     if (sourceEditor.isVisible) sourceEditor.value = content;
     updateImageStorageState(detectImageStorageState(editor.crepe) ?? 'local');
-    root.scrollTop = 0;
+    if (options?.record !== false) docHistory.push(from);
+    restoreView(options?.anchor, options?.scrollTop);
     statusBar.updateWordCount(content);
     updateToc();
     markEditorReady();
+    return 'opened';
   };
+
+  /** Replay one history entry. Same document, different place in it — an anchor
+   *  jump — needs no reload, only the scroll offset back. */
+  const restoreLocation = async (entry: DocLocation): Promise<OpenResult> => {
+    if (entry.path === getCurrentFilePath()) {
+      scrollerEl().scrollTop = entry.scrollTop;
+      return 'opened';
+    }
+    return openFile(entry.path, { scrollTop: entry.scrollTop, record: false });
+  };
+
+  /** `cancelled` deliberately does nothing at all: the user turned down the
+   *  unsaved-changes prompt, so the step they asked for never happened and the
+   *  entry has to still be there when they try again. */
+  const goBack = async (): Promise<void> => {
+    const entry = docHistory.peekBack();
+    if (!entry) return;
+    const from = captureLocation();
+    const result = await restoreLocation(entry);
+    if (result === 'opened') docHistory.commitBack(from);
+    else if (result === 'failed') docHistory.dropBack();
+  };
+
+  const goForward = async (): Promise<void> => {
+    const entry = docHistory.peekForward();
+    if (!entry) return;
+    const from = captureLocation();
+    const result = await restoreLocation(entry);
+    if (result === 'opened') docHistory.commitForward(from);
+    else if (result === 'failed') docHistory.dropForward();
+  };
+
+  titleBar.onNavigate = (direction) => {
+    void (direction === 'back' ? goBack() : goForward());
+  };
+
+  // Mouse back/forward. Handled on mousedown, and the default suppressed on
+  // both events: the WebView otherwise reads them as browser history and
+  // navigates away from the app itself.
+  eventManager.on(window, 'mousedown', (e) => {
+    if (e.button !== 3 && e.button !== 4) return;
+    e.preventDefault();
+    void (e.button === 3 ? goBack() : goForward());
+  });
+  eventManager.on(window, 'auxclick', (e) => {
+    if (e.button === 3 || e.button === 4) e.preventDefault();
+  });
 
   const getContent = () => {
     return sourceEditor.isVisible ? sourceEditor.value : editor.getMarkdown();
@@ -729,6 +949,8 @@ export class AppCoordinator {
     zoomOut: () => zoom.zoomOut(),
     zoomReset: () => zoom.reset(),
     localizeImages: () => changeImageStorage('local'),
+    navBack: () => { void goBack(); },
+    navForward: () => { void goForward(); },
   });
   shortcutManager.init();
   eventManager.addCleanup(() => shortcutManager.dispose());

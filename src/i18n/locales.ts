@@ -19,9 +19,11 @@ export interface Locale {
   revealNoFile: string;
   revealFailed: string;
 
-  // Document navigation
+  // Document links & navigation
   navBack: string;
   navForward: string;
+  docLinkNotFound: string;
+  docAnchorNotFound: string;
 
   fileName: string;
   newFile: string;
@@ -232,6 +234,8 @@ export const en: Locale = {
   revealFailed: 'Could not open the file manager.',
   navBack: 'Back (Alt+←)',
   navForward: 'Forward (Alt+→)',
+  docLinkNotFound: 'Linked document not found: {file}',
+  docAnchorNotFound: 'No heading matches "{anchor}"',
   fileName: 'File name:',
   newFile: 'New File',
   newFolder: 'New Folder',
@@ -409,6 +413,8 @@ export const zh: Locale = {
   revealFailed: '无法打开文件管理器。',
   navBack: '后退（Alt+←）',
   navForward: '前进（Alt+→）',
+  docLinkNotFound: '找不到链接的文档：{file}',
+  docAnchorNotFound: '找不到标题「{anchor}」',
   fileName: '文件名：',
   newFile: '新建文件',
   newFolder: '新建文件夹',

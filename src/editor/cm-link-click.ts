@@ -1,4 +1,5 @@
-// Ctrl/Cmd+click on a link in source mode opens it in the system browser.
+// Ctrl/Cmd+click on a link in source mode follows it: out to the system browser
+// for a URL, over to the document it names for a local one.
 //
 // Source mode is plain text, so there is nothing to hit-test: links are located
 // by scanning the hovered line (see `link-open.ts`). While the modifier is held
@@ -12,7 +13,8 @@ import {
   type DecorationSet,
   type PluginValue,
 } from '@codemirror/view';
-import { hasModifier, isModifierClick, linkAt, openExternalUrl } from './link-open';
+import { canOpen, hasModifier, isModifierClick, linkAt, openExternalUrl } from './link-open';
+import { openDocLink } from './doc-link';
 
 interface HoveredLink {
   from: number;
@@ -112,7 +114,8 @@ const linkMouseHandlers = EditorView.domEventHandlers({
     if (!link) return false;
     // Keep the click from also moving the cursor / starting a drag selection.
     event.preventDefault();
-    void openExternalUrl(link.url);
+    if (canOpen(link.url)) void openExternalUrl(link.url);
+    else openDocLink(link.url);
     return true;
   },
 });

@@ -1,21 +1,22 @@
-// Ctrl/Cmd+click on a link in the WYSIWYG editor opens it in the system
-// browser.
+// Ctrl/Cmd+click on a link in the WYSIWYG editor follows it: out to the system
+// browser for a URL, over to the document it names for a local one.
 //
 // Unlike source mode there are real <a> elements to hit-test, so this is just a
 // matter of getting in before Crepe's link tooltip claims the click.
 
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { isModifierClick, openExternalUrl, canOpen } from '../link-open';
+import { isModifierClick, openExternalUrl, canOpen, isDocLink } from '../link-open';
+import { openDocLink } from '../doc-link';
 
 const MODIFIER_CLASS = 'link-modifier-down';
 
-/** The <a> under the event, if it is one the browser should handle. */
+/** The <a> under the event, if it is one this editor knows how to follow. */
 function linkFrom(event: Event): HTMLAnchorElement | null {
   const target = event.target as HTMLElement | null;
   const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
   if (!anchor) return null;
   const href = anchor.getAttribute('href') ?? '';
-  return canOpen(href) ? anchor : null;
+  return canOpen(href) || isDocLink(href) ? anchor : null;
 }
 
 export function createLinkClickPlugin(): Plugin {
@@ -52,7 +53,9 @@ export function createLinkClickPlugin(): Plugin {
           if (!anchor) return false;
           event.preventDefault();
           event.stopPropagation();
-          void openExternalUrl(anchor.getAttribute('href') ?? '');
+          const href = anchor.getAttribute('href') ?? '';
+          if (canOpen(href)) void openExternalUrl(href);
+          else openDocLink(href);
           return true;
         },
       },
