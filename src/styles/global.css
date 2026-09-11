@@ -107,9 +107,38 @@ html, body {
   z-index: 1;
 }
 
-/* Narrow windows shrink the sidebar instead of letting it overlay the text. */
+/* Narrow windows shrink the sidebar instead of letting it overlay the text.
+   Dragging the divider sets --sidebar-width; without it this is the original
+   responsive default. */
 #sidebar.open {
-  width: clamp(160px, 22vw, 240px);
+  width: var(--sidebar-width, clamp(160px, 22vw, 240px));
+}
+
+/* Dragging has to be frame-accurate, so the open/close slide animation is
+   switched off for the duration. */
+#sidebar.resizing {
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+  transition: background-color 0.15s;
+}
+
+.sidebar-resizer:hover,
+#sidebar.resizing .sidebar-resizer {
+  background: var(--accent);
+}
+
+#sidebar:not(.open) .sidebar-resizer {
+  display: none;
 }
 
 #editor-root {

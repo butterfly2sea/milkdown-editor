@@ -4,6 +4,7 @@ import { SourceEditor } from '../editor/source-editor';
 import { installExternalLinkHandler } from '../editor/external-links';
 import { ZoomController } from '../editor/zoom';
 import { SidebarTabs } from '../sidebar/sidebar-tabs';
+import { installSidebarResize } from '../sidebar/sidebar-resize';
 import { TableOfContents } from '../sidebar/toc';
 import { RemoteFileTree } from '../sidebar/remote-tree';
 import { TitleBar } from '../titlebar/titlebar';
@@ -120,6 +121,9 @@ export class AppCoordinator {
 
   // Initialize sidebar tabs first, then create FileTree inside the files container
   const sidebarTabs = new SidebarTabs(sidebarEl);
+  // After the tabs: their constructor moves every existing child of #sidebar
+  // into the files panel, which would swallow the drag handle.
+  installSidebarResize(sidebarEl);
   const fileTree = new FileTree(sidebarTabs.filesEl);
   // Without a folder the tree has nothing to show, so the tab would only offer
   // a blank panel. It comes back the moment a folder is opened.

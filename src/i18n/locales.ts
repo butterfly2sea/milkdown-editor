@@ -67,6 +67,9 @@ export interface Locale {
   mathMenu: string;
   mathVirtualKeyboard: string;
 
+  // Sidebar
+  sidebarResizeHint: string;
+
   // Frontmatter card
   frontmatterTitle: string;
   frontmatterUntitled: string;
@@ -263,6 +266,7 @@ export const en: Locale = {
   mathToggleSource: 'Toggle LaTeX source',
   mathMenu: 'Formula menu',
   mathVirtualKeyboard: 'Toggle virtual keyboard',
+  sidebarResizeHint: 'Drag to resize · double-click to reset',
   frontmatterTitle: 'Frontmatter',
   frontmatterUntitled: '(no name)',
   frontmatterName: 'Name',
@@ -438,6 +442,7 @@ export const zh: Locale = {
   mathToggleSource: '切换 LaTeX 源码',
   mathMenu: '公式菜单',
   mathVirtualKeyboard: '切换虚拟键盘',
+  sidebarResizeHint: '拖动调整宽度 · 双击恢复默认',
   frontmatterTitle: '元信息',
   frontmatterUntitled: '(未命名)',
   frontmatterName: '名称',
