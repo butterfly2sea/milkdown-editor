@@ -7,6 +7,7 @@ import { TextSelection } from 'prosemirror-state';
 import { Slice } from 'prosemirror-model';
 import { mathPlugins } from './plugins/math-plugin';
 import { preloadMathLive } from './plugins/math-node-view';
+import { buildMathMenu } from './plugins/math-insert';
 import { plantumlPlugins } from './plugins/plantuml-plugin';
 import { mermaidPlugins } from './plugins/mermaid-plugin';
 import { highlightPlugins } from './plugins/highlight-plugin';
@@ -58,6 +59,7 @@ export async function createEditor(
     },
     featureConfigs: {
       [CrepeFeature.Toolbar]: clipboardToolbarConfig,
+      [CrepeFeature.BlockEdit]: { buildMenu: buildMathMenu },
       [CrepeFeature.ImageBlock]: buildImageBlockConfig(
         getCurrentFilePath,
         getImageStorageMode,
