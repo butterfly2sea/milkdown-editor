@@ -30,7 +30,10 @@ import { markCodeBlockCopied, trackCodeBlockCopyClicks } from './code-block-copy
 export interface EditorInstance {
   crepe: Crepe;
   getMarkdown: () => string;
-  setMarkdown: (md: string) => void;
+  /** `addToHistory` turns the replacement into an ordinary undoable step, for
+   *  callers that are handing back an edited version of the *same* document
+   *  (source mode) rather than loading a different one. */
+  setMarkdown: (md: string, options?: { addToHistory?: boolean }) => void;
   /** `generated` with every block that still means what it did in `original`
    *  restored to the text `original` spells it with. See
    *  {@link preserveSourceBlocks}. */
@@ -161,7 +164,7 @@ export async function createEditor(
     });
   };
 
-  const setMarkdown = (md: string): void => {
+  const setMarkdown = (md: string, options?: { addToHistory?: boolean }): void => {
     const { yaml, body } = splitFrontmatter(md);
     frontmatter.setYaml(yaml);
     crepe.editor.action((ctx) => {
@@ -173,7 +176,11 @@ export async function createEditor(
         0, view.state.doc.content.size,
         new Slice(doc.content, 0, 0)
       );
-      tr.setMeta('addToHistory', false);
+      // Loading a different document is not an edit. Coming back from source
+      // mode is: recording it keeps the undo stack a single consistent
+      // timeline, so Ctrl+Z steps back over the source-mode edits and then on
+      // into whatever was typed here before the switch.
+      if (!options?.addToHistory) tr.setMeta('addToHistory', false);
       view.dispatch(tr);
     });
   };
