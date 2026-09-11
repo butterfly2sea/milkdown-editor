@@ -1,6 +1,8 @@
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { editorViewCtx, parserCtx, remarkCtx } from '@milkdown/kit/core';
+import { blockConfig } from '@milkdown/kit/plugin/block';
+import type { Ctx } from '@milkdown/kit/ctx';
 import type { RemarkParser } from '@milkdown/kit/transformer';
 import { undo as pmUndo, redo as pmRedo } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
@@ -37,6 +39,31 @@ export interface EditorInstance {
 }
 
 export type ChangeCallback = (markdown: string) => void;
+
+/**
+ * Keep the block handle (the `+` and the six dots) pinned to the start of the
+ * line.
+ *
+ * `selectRootNodeByDom` resolves the node under the pointer and only walks up
+ * to its block parent when `filterNodes` rejects it. Crepe's own filter uses
+ * `findParent`, which inspects *ancestors* only — so when the probe lands on an
+ * inline atom such as `math_inline` the filter accepts it and the handle
+ * anchors mid-line. Rejecting inline nodes outright sends the lookup back up to
+ * the real block. Applied after `crepe.create()` on purpose: the plugin reads
+ * this ctx value fresh on every mousemove, so a later override still wins.
+ */
+function fixBlockHandleAnchor(ctx: Ctx): void {
+  ctx.set(blockConfig.key, {
+    filterNodes: (pos, node) => {
+      for (let depth = pos.depth; depth > 0; depth--) {
+        const name = pos.node(depth).type.name;
+        if (name === 'table' || name === 'blockquote') return false;
+      }
+      if (node?.isInline || node?.isText) return false;
+      return true;
+    },
+  });
+}
 
 export async function createEditor(
   root: HTMLElement,
@@ -109,6 +136,7 @@ export async function createEditor(
 
   await crepe.create();
   crepe.editor.action(installMarkdownNormalizer);
+  crepe.editor.action(fixBlockHandleAnchor);
   // Warm the MathLive chunk up front: a formula node view can only grab the
   // caret synchronously once the constructor is in memory, and otherwise the
   // keystroke right after `$x$` types over the formula it just created.
